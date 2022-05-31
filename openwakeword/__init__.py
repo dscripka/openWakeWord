@@ -1,0 +1,1 @@
+from openwakeword.detect import Model
