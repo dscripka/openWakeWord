@@ -18,6 +18,7 @@ import numpy as np
 import os
 from openwakeword.utils import AudioFeatures
 from typing import List
+import time
 
 class Model():
     def __init__(self, wakeword_model_paths: List[str], input_sizes: List[int], **kwargs):
@@ -36,16 +37,40 @@ class Model():
         # Create AudioFeatures object
         self.preprocessor = AudioFeatures(**kwargs)
 
-    def predict(self, x):
+    def predict(self, x, timing=False):
         """Predict with all of the wakeword models on the input audio frames"""
+        # Get audio features
+        if timing:
+            timing_dict = {}
+            timing_dict["models"] = {}
+            feature_start = time.time()
+        
         self.preprocessor(x)
+
+        if timing:
+            feature_end = time.time()
+            timing_dict["preprocessor"] = feature_end - feature_start
+
+        # Get predictions from model(s)
         predictions = {}
         for mdl in self.models.keys():
             input_name = self.models[mdl].get_inputs()[0].name
+
+            if timing:
+                model_start = time.time()
+
             predictions[mdl] = self.models[mdl].run(
                                     None,
                                     {input_name: self.preprocessor.get_features(self.model_inputs[mdl])}
                                 )[0][0][0]
-        return predictions
+
+            if timing:
+                model_end = time.time()
+                timing_dict["models"][mdl] = model_end - model_start
+
+        if timing:
+            return predictions, timing_dict
+        else:
+            return predictions
 
         

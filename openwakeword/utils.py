@@ -12,17 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 # Imports
 import os
 import onnxruntime as ort
 import numpy as np
+import pathlib
 from collections import deque
 
 # Base class for computing audio features using Google's speech_embedding model (https://tfhub.dev/google/speech_embedding/1)
 class AudioFeatures():
     def __init__(self,
-            melspec_onnx_model_path=os.path.join("openwakeword", "resources", "models", "melspectrogram.onnx"),
-            embedding_onnx_model_path=os.path.join("openwakeword", "resources", "models", "embedding_model.onnx"),
+            melspec_onnx_model_path=os.path.join(pathlib.Path(__file__).parent.resolve(), "resources", "models", "melspectrogram.onnx"),
+            embedding_onnx_model_path=os.path.join(pathlib.Path(__file__).parent.resolve(), "resources", "models", "embedding_model.onnx"),
             sr=16000,
             ncpu=1
         ):
@@ -80,22 +82,17 @@ class AudioFeatures():
             self.melspectrogram_buffer = self.melspectrogram_buffer[-self.melspectrogram_max_len:, :]
     
     def _streaming_features(self, x):
-        assert len(x) == 1280*3
+        if len(x) != 1280:
+            raise ValueError(f"You must provide input samples in frames of 1280 samples @ 1600khz. Received a frame of {len(x)} samples.")
         self._streaming_melspectrogram(x)
-        if self.melspectrogram_buffer.shape[0] < 76:
-            pass
-        for i in range(-3,0,1):
-            start = -76+8*i
-            end = start + 76
-            x = self.melspectrogram_buffer[start:end].astype(np.float32)[None,:,:,None]
-            if x.shape[1] != 76:
-                continue
+        x = self.melspectrogram_buffer[-76:].astype(np.float32)[None,:,:,None]
+        if x.shape[1] == 76:
             self.feature_buffer = np.vstack((self.feature_buffer, self.embedding_model.run(None, {'input_1': x})[0].squeeze()))
             
         if self.feature_buffer.shape[0] > self.feature_buffer_max_len:
             self.feature_buffer = self.feature_buffer[-self.feature_buffer_max_len:, :]
 
-    def get_features(self, x, n_feature_frames=16):
+    def get_features(self, n_feature_frames=16):
         return self.feature_buffer[-n_feature_frames:, :][None,].astype(np.float32)
             
     def __call__(self, x):
