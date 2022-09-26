@@ -15,7 +15,6 @@
 # imports
 import random
 from typing import List
-from tqdm import tqdm
 import numpy as np
 from speechbrain.dataio.dataio import read_audio
 import torch
@@ -30,6 +29,7 @@ def mix_clips_batch(
         snr_low: float=0,
         snr_high: float=0,
         start_index: List[int]=[],
+        seed: int=None
     ):
     """
     Mixes foreground and background clips at a random SNR level in batches.
@@ -45,14 +45,21 @@ def mix_clips_batch(
         snr_low (float): The low SNR level of the mixing in db
         snr_high (float): The high snr level of the mixing in db
         start_index (List[int]): The starting position (in samples) for the foreground clip to start in the background clip.
+        seed (int): A random seed
+
+    Returns:
+        generator: Returns a generator that yields batches of mixed foreground/background audio
     """
-    
+    # Set random seed, if needed
+    if seed:
+        np.random.seed(seed)
+        random.seed(seed)
+
     # Set start indices, if needed
     if not start_index:
         start_index = [0]*batch_size
     
-    mixed_clips = np.empty((len(foreground_clips), combined_size))
-    for i in tqdm(list(range(0, len(foreground_clips), batch_size))):
+    for i in range(0, len(foreground_clips), batch_size):
         # Load foreground clips and truncate (if needed)
         foreground_clips_batch = [read_audio(i)[0:combined_size] for i in foreground_clips[i:i+batch_size]]
         
@@ -87,6 +94,4 @@ def mix_clips_batch(
         )
         mixed_clips_batch = mixed_clips_batch / abs_max.clamp(min=1.0)
 
-        mixed_clips[i:i+mixed_clips_batch.shape[0], :] = mixed_clips_batch.numpy()
-    
-    return mixed_clips
+        yield mixed_clips_batch.numpy()

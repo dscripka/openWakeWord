@@ -47,6 +47,7 @@ class AudioFeatures():
         
     def _get_melspectrogram(self, x, melspec_transform = lambda x: x/10 + 2):
         """Function to compute the mel-spectrogram of the provided audio samples."""
+        x = np.array(x) if isinstance(x, list) else x
         x = x[None,] if len(x.shape) < 2 else x
         x = x.astype(np.float32) if x.dtype!=np.float32 else x 
         outputs = self.melspec_model.run(None, {'input': x})
@@ -251,6 +252,44 @@ class AudioFeatures():
 
 # Dato I/O utils
 
+def filter_wav_paths(target_dirs, min_length, max_length):
+    """
+    Gets the paths of wav files in a flat target directory, automatically filtering
+    out files below/above the specified length (in seconds). Assumes that all
+    wav files are sampled at 16khz, are single channel, and have 16-bit PCM data.
+
+    Uses `os.scandir` in Python for highly efficient file system exploration,
+    and doesn't require loading the files into memory for length estimation.
+
+    Args:
+        target_dir (List[str]): The target directories containing the wav files
+        min_length_secs (float): The minimum length in seconds (otherwise the clip is skipped)
+        max_length_secs (float): The maximum length in seconds (otherwise the clip is skipped)
+    
+    Returns:
+        tuple: A list of strings corresponding to the paths of the wav files that met the length criteria,
+               and a list of their durations (in seconds)
+    """
+
+    clips = []
+    for target_dir in target_dirs:
+        clips_ = [(i.path, get_wav_duration_from_filesize(i.stat().st_size)) for i in os.scandir(target_dir)]
+        clips_ = [i for i in clips_ if i[1] >= min_length and i[1] <= max_length]
+        clips.extend(clips_)
+    return [i[0] for i in clips], [i[1] for i in clips]
+
+def get_wav_duration_from_filesize(size):
+    """
+    Calculates the duration (in seconds) from a WAV file, assuming it contains 16 khz, 16 bit, single-channel audio.
+
+    Args:
+        size (int): The file size in bytes
+    
+    Returns:
+        float: The duraction of the audio file in seconds
+    """
+    return (size-44)/2/16000
+
 def load_wav_clips(files, clip_size=32000):
     """
     Loads the specified audio files and shapes them into an array of N by `clip_size`,
@@ -268,7 +307,13 @@ def load_wav_clips(files, clip_size=32000):
         ndarray: A N by `clip_size` array with the audio data
     """
     
-    audio_data = [scipy.io.wavfile.read(i)[1] for i in files]
+    audio_data = []
+    for i in files:
+        try:
+            audio_data.append(scipy.io.wavfile.read(i)[1])
+        except ValueError:
+            continue
+
     N = sum([i.shape[0] for i in audio_data])//clip_size
     
     X = np.empty((N, clip_size))
@@ -293,7 +338,7 @@ class mmap_batch_generator:
     by the `n_per_class` initialization argument. When a mmaped numpy array has been
     fully interated over, it will restart at the zeroth index automatically.
     """
-    def __init__(self, data_files, n_per_class):
+    def __init__(self, data_files, n_per_class, transform_funcs = {}):
         """
         Initialize the generator object
 
@@ -302,10 +347,24 @@ class mmap_batch_generator:
                                Keys should be integer strings representing class labels.
             n_per_class (dict): A dictionary with integer string labels (as keys) and number of example per batch
                                (as values).
+            transform_funcs (dict): A dictionary of transformation functions to apply to each batch of per class
+                                    data loaded from the mmaped array. For example, with an array of shape
+                                    (batch, timesteps, features), if the goal is to half the timesteps per example,
+                                    (effectively doubling the size of the batch) this function could be passed:
+                                    
+                                    lambda x: np.vstack(
+                                        (x[:, 0:timesteps//2, :], x[:, timesteps//2:, :]
+                                    ))
+
+                                    The user should incorporate the effect of any transform on the values of the 
+                                    `n_per_class` argument accordingly, in order to end of with the desired
+                                    total batch size for each iteration of the generator.
+                                    
         """
         # inputs
         self.data_files = data_files
         self.n_per_class = n_per_class
+        self.transform_funcs = transform_funcs
         
         # Get array mmaps and counter object
         self.data = {label:np.load(fl, mmap_mode='r') for label, fl in data_files.items()}
@@ -334,6 +393,12 @@ class mmap_batch_generator:
                 # Get data from mmaped file
                 x = self.data[label][self.data_counter[label]:self.data_counter[label]+n]
                 self.data_counter[label] += x.shape[0]
+
+                # Transform data
+                if self.transform_funcs:
+                    x = self.transform_funcs[label](x)
+
+                # Add data to batch
                 X.append(x)
                 y.extend([int(label)]*x.shape[0])
 
