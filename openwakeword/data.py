@@ -20,12 +20,13 @@ import numpy as np
 import torch
 from speechbrain.dataio.dataio import read_audio
 import torchaudio
+import mutagen
 
 # Load audio clips and structure into clips of the same length
 
 def load_audio_clips(files, clip_size=32000):
     """
-    Loads the specified audio files and shapes them into an array of N by `clip_size`,
+    Takes the specified audio files and shapes them into an array of N by `clip_size`,
     where N is determined by the length of the audio files and `clip_size` at run time.
     
     Clips longer than `clip size` are truncated and extended into the N+1 row.
@@ -71,7 +72,7 @@ def load_audio_clips(files, clip_size=32000):
 
 # Dato I/O utils
 
-def filter_wav_paths(target_dirs, min_length, max_length):
+def filter_audio_paths(target_dirs, min_length, max_length, duration_method="size"):
     """
     Gets the paths of wav files in a flat target directory, automatically filtering
     out files below/above the specified length (in seconds). Assumes that all
@@ -84,6 +85,10 @@ def filter_wav_paths(target_dirs, min_length, max_length):
         target_dir (List[str]): The target directories containing the wav files
         min_length_secs (float): The minimum length in seconds (otherwise the clip is skipped)
         max_length_secs (float): The maximum length in seconds (otherwise the clip is skipped)
+        duration_method (str): Whether to use the file size ('size'), or header information ('header')
+                               to estimate the duration of the audio file. 'size' is generally
+                               much faster, but assumes that all files in the target directory
+                               are the same type, sample rate, and bitrate.
     
     Returns:
         tuple: A list of strings corresponding to the paths of the wav files that met the length criteria,
@@ -92,13 +97,50 @@ def filter_wav_paths(target_dirs, min_length, max_length):
 
     clips = []
     for target_dir in target_dirs:
-        clips_ = [(i.path, get_wav_duration_from_filesize(i.stat().st_size)) for i in os.scandir(target_dir)]
-        clips_ = [i for i in clips_ if i[1] >= min_length and i[1] <= max_length]
-        clips.extend(clips_)
-    return [i[0] for i in clips], [i[1] for i in clips]
+        file_paths = []
+        sizes = []
+        for i in os.scandir(target_dir):
+            file_paths.append(i.path)
+            sizes.append(i.stat().st_size)
+        
+        if duration_method == "size":
+            durations = estimate_clip_duration(file_paths, sizes)
+
+        elif duration_method == "header":
+            durations = [get_clip_duration(i) for i in file_paths]
+
+    return file_paths, durations
+
+def estimate_clip_duration(audio_files: list, sizes: list):
+    """Estimates the duration of each audio file in a list.
+    
+    Assumes that all of the audio files have the same audio format,
+    bit depth, and sample rate.
+
+    Args:
+        audio_file (str): A list of audio file paths
+        sizes (int): The size of each audio file in bytes
+
+    Returns:
+        list: A list of durations (in seconds) for the audio files
+    """
+
+    # Determine file type by checking the first file
+    details = torchaudio.info(audio_files[0])
+
+    # Caculate any correction factors needed from the first file
+    details = mutagen.File(audio_files[0])
+    correction = 8*os.path.getsize(audio_files[0]) - details.info.bitrate*details.info.length
+
+    # Estimate duration for all remaining clips from file size only
+    durations = []
+    for size in sizes:
+        durations.append((size*8-correction)/details.info.bitrate)
+    
+    return durations
 
 def get_clip_duration(clip):
-    """Gets the duraction of an audio clip in seconds from file header information"""
+    """Gets the duration of an audio clip in seconds from file header information"""
     metadata = torchaudio.info(clip)
     return metadata.num_frames/metadata.sample_rate
 
