@@ -46,9 +46,9 @@ class AudioFeatures():
         
     def _get_melspectrogram(self, x, melspec_transform = lambda x: x/10 + 2):
         """Function to compute the mel-spectrogram of the provided audio samples."""
-        x = np.array(x) if isinstance(x, list) else x
+        x = np.array(x).astype(np.int16) if isinstance(x, list) else x
         if x.dtype != np.int16:
-            raise ValueError("Input data must be 16-bit integers (i.e., 16-bit PCM audio)")
+            raise ValueError(f"Input data must be 16-bit integers (i.e., 16-bit PCM audio). You provided {x.dtype} data.")
         x = x[None,] if len(x.shape) < 2 else x
         x = x.astype(np.float32) if x.dtype!=np.float32 else x 
         outputs = self.melspec_model.run(None, {'input': x})
@@ -76,6 +76,11 @@ class AudioFeatures():
         batch = np.expand_dims(np.array(windows), axis=-1).astype(np.float32)
         embedding = self.embedding_model.run(None, {'input_1': batch})[0].squeeze()
         return embedding
+
+    def get_embedding_shape(self, audio_length, sr=16000):
+        """Function that determines the size of the output embedding array for a given audio clip length (in seconds)"""
+        x = (np.random.uniform(-1, 1, audio_length*sr)*32767).astype(np.int16)
+        return self._get_embeddings(x).shape
 
     def _get_melspectrogram_batch(self, x, batch_size=128, ncpu=1):
         """

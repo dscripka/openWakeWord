@@ -13,8 +13,10 @@
 # limitations under the License.
 
 # imports
+from math import comb
 import os
 import random
+from tqdm import tqdm
 from typing import List
 import numpy as np
 import torch
@@ -23,6 +25,36 @@ import torchaudio
 import mutagen
 
 # Load audio clips and structure into clips of the same length
+
+def stack_clips(audio_data, clip_size=16000*2):
+    """
+    Takes an input list of 1D arrays (of different lengths), concatenates them together,
+    and then extracts clips of a uniform size by dividing the combined array.
+    Also converts the resulting array to 16-bit PCM format.
+
+    Args:
+        audio_data (List[ndarray]): A list of 1D numpy arrays to combine and stack
+        clip_size (int): The desired total length of the uniform clip size (in samples)
+
+    Returns:
+        ndarray: A N by `clip_size` array with the audio data, converted to 16-bit PCM
+    """
+
+    # Combine all clips into single clip
+    combined_data = np.hstack((audio_data))
+
+    # Get chunks of the specified size
+    new_examples = []
+    for i in range(0, combined_data.shape[0], clip_size):
+        chunk = combined_data[i:i+clip_size]
+        if chunk.shape[0] != clip_size:
+            chunk = np.hstack((chunk, np.zeros(clip_size - chunk.shape[0])))
+        new_examples.append(chunk)
+    
+    # Convert to 16-bit PCM data
+    X = (np.array(new_examples).astype(np.float32)*32767).astype(np.int16)
+
+    return X
 
 def load_audio_clips(files, clip_size=32000):
     """
@@ -107,7 +139,7 @@ def filter_audio_paths(target_dirs, min_length, max_length, duration_method="siz
             durations = estimate_clip_duration(file_paths, sizes)
 
         elif duration_method == "header":
-            durations = [get_clip_duration(i) for i in file_paths]
+            durations = [get_clip_duration(i) for i in tqdm(file_paths)]
 
     return file_paths, durations
 
