@@ -104,7 +104,7 @@ def load_audio_clips(files, clip_size=32000):
 
 # Dato I/O utils
 
-def filter_audio_paths(target_dirs, min_length, max_length, duration_method="size"):
+def filter_audio_paths(target_dirs, min_length_secs, max_length_secs, duration_method="size"):
     """
     Gets the paths of wav files in a flat target directory, automatically filtering
     out files below/above the specified length (in seconds). Assumes that all
@@ -127,21 +127,25 @@ def filter_audio_paths(target_dirs, min_length, max_length, duration_method="siz
                and a list of their durations (in seconds)
     """
 
-    clips = []
+    file_paths = []
+    durations = []
     for target_dir in target_dirs:
-        file_paths = []
         sizes = []
+        dir_paths = []
         for i in os.scandir(target_dir):
+            dir_paths.append(i.path)
             file_paths.append(i.path)
             sizes.append(i.stat().st_size)
         
         if duration_method == "size":
-            durations = estimate_clip_duration(file_paths, sizes)
+            durations.extend(estimate_clip_duration(dir_paths, sizes))
 
         elif duration_method == "header":
-            durations = [get_clip_duration(i) for i in tqdm(file_paths)]
+            durations.extend([get_clip_duration(i) for i in tqdm(dir_paths)])
 
-    return file_paths, durations
+    filtered = [(i,j) for i,j in zip(file_paths, durations) if j >= min_length_secs and j <= max_length_secs]
+    return [i[0] for i in filtered], [i[1] for i in filtered]
+
 
 def estimate_clip_duration(audio_files: list, sizes: list):
     """Estimates the duration of each audio file in a list.
@@ -339,15 +343,15 @@ class mmap_batch_generator:
                 x = self.data[label][self.data_counter[label]:self.data_counter[label]+n]
                 self.data_counter[label] += x.shape[0]
 
-                # Make labels for data
-                y_batch = [label]*x.shape[0]
-
                 # Transform data
-                if self.data_transform_funcs:
+                if self.data_transform_funcs and self.data_transform_funcs.get(label):
                     x = self.data_transform_funcs[label](x)
 
+                # Make labels for data (following whatever the current shape of `x` is)
+                y_batch = [label]*x.shape[0]
+
                 # Transform labels
-                if self.label_transform_funcs:
+                if self.label_transform_funcs and self.label_transform_funcs.get(label):
                     y_batch = self.label_transform_funcs[label](y_batch)
 
                 # Add data to batch

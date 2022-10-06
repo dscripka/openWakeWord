@@ -15,6 +15,7 @@
 # Imports
 import onnxruntime as ort
 import numpy as np
+import wave
 import os
 from openwakeword.utils import AudioFeatures
 from typing import List
@@ -31,11 +32,34 @@ class Model():
         self.model_inputs = {}
         for size, mdl_path in zip(input_sizes, wakeword_model_paths):
             mdl_name = mdl_path.split(os.path.sep)[-1].strip(".onnx")
-            self.models[mdl_name] = ort.InferenceSession(mdl_path, sess_options=sessionOptions)
+            self.models[mdl_name] = ort.InferenceSession(mdl_path, sess_options=sessionOptions, providers=["CPUExecutionProvider"])
             self.model_inputs[mdl_name] = size
 
         # Create AudioFeatures object
         self.preprocessor = AudioFeatures(**kwargs)
+
+    def predict_clip(self, clip):
+        """Predict on an full audio clip, simulating streaming prediction.
+        The input clip must bit a 16-bit, 16 khz, single-channel WAV file.
+
+        Args:
+            clip (str): The path to a 16-bit PCM, 16 khz, single-channel WAV file
+        
+        Returns:
+            list: A list containing the frame-level prediction dictionaries for the audio clip
+        """
+        # Load audio clip as 16-bit PCM data
+        with wave.open(clip, mode='rb') as f:
+            # Load WAV clip frames
+            data = np.frombuffer(f.readframes(f.getnframes()), dtype=np.int16)
+
+        # Iterate through clip, getting predictions
+        predictions = []
+        step_size = 1280
+        for i in range(0, data.shape[0]-step_size, step_size):
+            predictions.append(self.predict(data[i:i+step_size]))
+
+        return predictions
 
     def predict(self, x, timing=False):
         """Predict with all of the wakeword models on the input audio frames"""
