@@ -19,6 +19,7 @@ import wave
 import os
 from openwakeword.utils import AudioFeatures
 from typing import List
+from functools import reduce
 import time
 
 class Model():
@@ -30,20 +31,23 @@ class Model():
 
         self.models = {}
         self.model_inputs = {}
+        self.model_input_names = {}
         for size, mdl_path in zip(input_sizes, wakeword_model_paths):
             mdl_name = mdl_path.split(os.path.sep)[-1].strip(".onnx")
             self.models[mdl_name] = ort.InferenceSession(mdl_path, sess_options=sessionOptions, providers=["CPUExecutionProvider"])
             self.model_inputs[mdl_name] = size
+            self.model_input_names[mdl_name] = self.models[mdl_name].get_inputs()[0].name
 
         # Create AudioFeatures object
         self.preprocessor = AudioFeatures(**kwargs)
 
-    def predict_clip(self, clip):
+    def predict_clip(self, clip, **kwargs):
         """Predict on an full audio clip, simulating streaming prediction.
         The input clip must bit a 16-bit, 16 khz, single-channel WAV file.
 
         Args:
             clip (str): The path to a 16-bit PCM, 16 khz, single-channel WAV file
+            kwargs: Any keyword arguments to pass to the class `predict` method
         
         Returns:
             list: A list containing the frame-level prediction dictionaries for the audio clip
@@ -57,11 +61,11 @@ class Model():
         predictions = []
         step_size = 1280
         for i in range(0, data.shape[0]-step_size, step_size):
-            predictions.append(self.predict(data[i:i+step_size]))
+            predictions.append(self.predict(data[i:i+step_size], **kwargs))
 
         return predictions
 
-    def predict(self, x, timing=False):
+    def predict(self, x, verify_rounds=None, timing=False):
         """Predict with all of the wakeword models on the input audio frames"""
         # Get audio features
         if timing:
@@ -78,7 +82,7 @@ class Model():
         # Get predictions from model(s)
         predictions = {}
         for mdl in self.models.keys():
-            input_name = self.models[mdl].get_inputs()[0].name
+            input_name = self.model_input_names[mdl]
 
             if timing:
                 model_start = time.time()
@@ -87,6 +91,18 @@ class Model():
                                     None,
                                     {input_name: self.preprocessor.get_features(self.model_inputs[mdl])}
                                 )[0][0][0]
+
+            if verify_rounds is not None and predictions[mdl] >= 0.5: # make threshold user configurable?
+                # Use TTA (test time augmentation) to re-check positive predictions
+                tta_predictions = []
+                offset = 200
+                for round in range(1, verify_rounds+1):
+                    x = list(self.preprocessor.raw_data_buffer)[-32000-offset*round:-offset*round] # arbitrary chunk size, adjust as needed?
+                    tta_predictions.append(self.models[mdl].run(
+                                    None,
+                                    {input_name: self.preprocessor._get_embeddings(x)[None,]}
+                                )[0][0][0])
+                    predictions[mdl] = reduce(lambda x, y: x*y, tta_predictions)
 
             if timing:
                 model_end = time.time()
