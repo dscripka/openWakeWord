@@ -13,8 +13,9 @@
 # limitations under the License.
 
 # imports
-from math import comb
+from multiprocessing.pool import ThreadPool
 import os
+from pathlib import Path
 import random
 from tqdm import tqdm
 from typing import List
@@ -104,9 +105,38 @@ def load_audio_clips(files, clip_size=32000):
 
 # Dato I/O utils
 
-def filter_audio_paths(target_dirs, min_length_secs, max_length_secs, duration_method="size"):
+# Convert clips with sox
+def _convert_clip(input_file, output_file):
+    cmd = f"sox {input_file} -G -r 16000 -c 1 {output_file}"
+    os.system(cmd)
+    return None
+
+
+def convert_clips(input_files, output_files, sr=16000, ncpu=1):
     """
-    Gets the paths of wav files in a flat target directory, automatically filtering
+    Converts files in parallel with multithreading using Sox.
+    
+    Intended to only convert input audio files in single-channel, 16 khz clips.
+    
+    Args:
+        input_files (List[str]): A list of paths to input files
+        output_files (List[str]): A list of paths ot output files, correspondind 1:1 to the input files
+        sr (int): The output sample rate of the converted clip
+        ncpu (int): The number of CPUs to use for the conversion
+        
+    Returns:
+        None
+    """
+    # Setup ThreadPool object
+    pool = ThreadPool(processes=ncpu)
+    
+    # Submit jobs
+    pool.starmap(_convert_clip, [(i,j) for i,j in zip(input_files, output_files)])
+
+
+def filter_audio_paths(target_dirs, min_length_secs, max_length_secs, duration_method="size", filetype=None):
+    """
+    Gets the paths of wav files in flat target directories, automatically filtering
     out files below/above the specified length (in seconds). Assumes that all
     wav files are sampled at 16khz, are single channel, and have 16-bit PCM data.
 
@@ -114,13 +144,14 @@ def filter_audio_paths(target_dirs, min_length_secs, max_length_secs, duration_m
     and doesn't require loading the files into memory for length estimation.
 
     Args:
-        target_dir (List[str]): The target directories containing the wav files
+        target_dir (List[str]): The target directories containing the audio files
         min_length_secs (float): The minimum length in seconds (otherwise the clip is skipped)
         max_length_secs (float): The maximum length in seconds (otherwise the clip is skipped)
         duration_method (str): Whether to use the file size ('size'), or header information ('header')
                                to estimate the duration of the audio file. 'size' is generally
                                much faster, but assumes that all files in the target directory
                                are the same type, sample rate, and bitrate.
+        filetype (str): The format of the audio files to include (by extension)
     
     Returns:
         tuple: A list of strings corresponding to the paths of the wav files that met the length criteria,
@@ -132,10 +163,15 @@ def filter_audio_paths(target_dirs, min_length_secs, max_length_secs, duration_m
     for target_dir in target_dirs:
         sizes = []
         dir_paths = []
-        for i in os.scandir(target_dir):
-            dir_paths.append(i.path)
-            file_paths.append(i.path)
-            sizes.append(i.stat().st_size)
+        if filetype:
+            dir_paths = [str(i) for i in Path(target_dir).glob(f"**/*{filetype}")]
+            file_paths.extend(dir_paths)
+            sizes.extend([os.path.getsize(i) for i in dir_paths])
+        else:
+            for i in os.scandir(target_dir):
+                dir_paths.append(i.path)
+                file_paths.append(i.path)
+                sizes.append(i.stat().st_size)
         
         if duration_method == "size":
             durations.extend(estimate_clip_duration(dir_paths, sizes))
@@ -177,7 +213,11 @@ def estimate_clip_duration(audio_files: list, sizes: list):
 
 def get_clip_duration(clip):
     """Gets the duration of an audio clip in seconds from file header information"""
-    metadata = torchaudio.info(clip)
+    try:
+        metadata = torchaudio.info(clip)
+    except RuntimeError: # skip cases where file metadata can't be read
+        return 0
+
     return metadata.num_frames/metadata.sample_rate
 
 def get_wav_duration_from_filesize(size, nbytes=2):
@@ -283,15 +323,18 @@ class mmap_batch_generator:
     by the `n_per_class` initialization argument. When a mmaped numpy array has been
     fully interated over, it will restart at the zeroth index automatically.
     """
-    def __init__(self, data_files, n_per_class, data_transform_funcs = {}, label_transform_funcs = {}):
+    def __init__(self, data_files, batch_size, n_per_class = None, data_transform_funcs = {}, label_transform_funcs = {}):
         """
         Initialize the generator object
 
         Args:
             data_files (dict): A dictionary of labels (as keys) and on-disk numpy array paths (as values).
                                Keys should be integer strings representing class labels.
+            batch_size (int): The number of samples per batch
             n_per_class (dict): A dictionary with integer string labels (as keys) and number of example per batch
-                               (as values).
+                               (as values). If None (the default), batch sizes for each class will be automatically calculated based on the
+                               the input dataframe shapes and transformation functions.
+
             data_transform_funcs (dict): A dictionary of transformation functions to apply to each batch of per class
                                     data loaded from the mmaped array. For example, with an array of shape
                                     (batch, timesteps, features), if the goal is to half the timesteps per example,
@@ -320,8 +363,21 @@ class mmap_batch_generator:
         self.data_counter = {label:0 for label in data_files.keys()}
         self.shapes = {label:self.data[label].shape for label in self.data.keys()}
 
-        # Get estimated batches per epoch
-        batch_size = sum([val for val in n_per_class.values()])
+        # Update effective shape of mmpa array based on user-provided transforms
+        for lbl, f in self.data_transform_funcs.items():
+            dummy_data = np.random.random((1, self.shapes[lbl][1], self.shapes[lbl][2]))
+            new_shape = f(dummy_data).shape
+            self.shapes[lbl] = (new_shape[0]*self.shapes[lbl][0], new_shape[1], new_shape[2])
+
+        # Calculate batch sizes, if the user didn't specify them
+        if not self.n_per_class:
+            self.n_per_class = {}
+            for lbl, shape in self.shapes.items():
+                ratio = self.shapes[lbl][0]/sum([i[0] for i in self.shapes.values()])
+                self.n_per_class[lbl] = max(1, int(batch_size*ratio))
+
+        # Get estimated batches per epoch, including the effect of any user-provided transforms
+        batch_size = sum([val for val in self.n_per_class.values()])
         batches_per_epoch = sum([i[0] for i in self.shapes.values()])//batch_size
         self.batch_per_epoch = batches_per_epoch
         print("Batches/steps per epoch:", batches_per_epoch)

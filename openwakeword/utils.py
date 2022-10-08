@@ -33,8 +33,10 @@ class AudioFeatures():
         sessionOptions = ort.SessionOptions()
         sessionOptions.inter_op_num_threads = ncpu
         sessionOptions.intra_op_num_threads = ncpu
-        self.melspec_model = ort.InferenceSession(melspec_onnx_model_path, sess_options=sessionOptions)
-        self.embedding_model = ort.InferenceSession(embedding_onnx_model_path, sess_options=sessionOptions)
+        self.melspec_model = ort.InferenceSession(melspec_onnx_model_path, sess_options=sessionOptions,
+                                                  providers=["CUDAExecutionProvider", "CPUExecutionProvider"])
+        self.embedding_model = ort.InferenceSession(embedding_onnx_model_path, sess_options=sessionOptions,
+                                                    providers=["CUDAExecutionProvider", "CPUExecutionProvider"])
         self.onnx_execution_provider = self.melspec_model.get_providers()[0]
 
         # Create databuffers
