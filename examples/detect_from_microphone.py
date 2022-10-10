@@ -17,7 +17,7 @@ import os
 import plotext as plt
 import sounddevice
 import numpy as np
-from openwakeword.detect import Model
+from openwakeword.model import Model
 
 # Get microphone stream
 mic_stream = sounddevice.InputStream(

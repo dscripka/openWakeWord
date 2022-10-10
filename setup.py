@@ -6,9 +6,12 @@ with open("README.md", "r", encoding="utf-8") as fh:
 setuptools.setup(
     name="openwakeword",
     version="0.0.1",
+    install_requires=[
+        'onnxruntime>=1.10.0,<2'
+    ],
     author="David Scripka",
     author_email="david.scripka@gmail.com",
-    description="An open-source audio wake word (or phrase) detection framework with a focus on accuracy and customizability",
+    description="An open-source audio wake word (or phrase) detection framework with a focus on performance and simplicity",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/pypa/sampleproject",

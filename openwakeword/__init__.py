@@ -1,1 +1,1 @@
-from openwakeword.detect import Model
+from openwakeword.model import Model

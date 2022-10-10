@@ -20,6 +20,9 @@ import numpy as np
 import pathlib
 from collections import deque
 from multiprocessing.pool import ThreadPool
+from multiprocessing import Process, Queue
+import time
+import openwakeword
 
 # Base class for computing audio features using Google's speech_embedding model (https://tfhub.dev/google/speech_embedding/1)
 class AudioFeatures():
@@ -257,3 +260,57 @@ class AudioFeatures():
             
     def __call__(self, x):
         self._streaming_features(x)
+
+
+# Bulk prediction function
+def bulk_predict(file_paths, wakeword_model_paths, ncpu=1):
+    """
+    Bulk predict on the provided input files in parallel using multiprocessing using the specified model.
+
+    Args:
+        input_paths (List[str]): The list of input file to predict
+        wakeword_model_path (List(str)): The paths to the wakeword ONNX model files
+        ncpu (int): How many processes to create (up to max of available CPUs)
+
+    Returns:
+        dict: A dictionary containing the predictions for each file, with the filepath as the key
+    """
+
+    # Create openWakeWord model objects
+    n_batches = len(file_paths)//ncpu
+    remainder = len(file_paths) % ncpu
+    chunks = [file_paths[i:i+n_batches] for i in range(0, len(file_paths)-remainder, n_batches)]
+    for i in range(1, remainder+1):
+        chunks[i-1].append(file_paths[-1*i])
+
+    # Create jobs
+    ps = []
+    mdls = []
+    q = Queue()
+    for chunk in chunks:
+        oww = openwakeword.Model(
+            wakeword_model_paths=wakeword_model_paths,
+            input_sizes=[16]
+        )
+        mdls.append(oww)
+        def f(clips):
+            results = []
+            for clip in clips:
+                results.append({clip: mdls[-1].predict_clip(clip)})
+            q.put(results)
+        
+        ps.append(Process(target=f, args=(chunk,)))
+
+    # Submit jobs
+    for p in ps:
+        p.start()
+
+    # Collection results
+    results = []
+    for p in ps:
+        while q.empty():
+            time.sleep(1)
+        results.extend(q.get())
+
+    # Consolidate results and return
+    return {list(i.keys())[0]:list(i.values())[0] for i in results}
