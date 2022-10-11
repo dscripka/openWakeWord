@@ -41,12 +41,14 @@ class Model():
         # Create AudioFeatures object
         self.preprocessor = AudioFeatures(**kwargs)
 
-    def predict_clip(self, clip, **kwargs):
+    def predict_clip(self, clip, padding=True, **kwargs):
         """Predict on an full audio clip, simulating streaming prediction.
         The input clip must bit a 16-bit, 16 khz, single-channel WAV file.
 
         Args:
             clip (str): The path to a 16-bit PCM, 16 khz, single-channel WAV file
+            padding (bool): Whether to pad the clip on either side with 1 second of silence
+                            to make sure that short clips can be processed correctly (default: True)
             kwargs: Any keyword arguments to pass to the class `predict` method
         
         Returns:
@@ -56,6 +58,8 @@ class Model():
         with wave.open(clip, mode='rb') as f:
             # Load WAV clip frames
             data = np.frombuffer(f.readframes(f.getnframes()), dtype=np.int16)
+            if padding:
+                data = np.concatenate((np.zeros(32000), data, np.zeros(32000)))
 
         # Iterate through clip, getting predictions
         predictions = []
