@@ -17,6 +17,7 @@ import onnxruntime as ort
 import numpy as np
 import wave
 import os
+from collections import deque
 from openwakeword.utils import AudioFeatures
 from typing import List
 from functools import reduce
@@ -29,6 +30,7 @@ class Model():
         sessionOptions.inter_op_num_threads = 1
         sessionOptions.intra_op_num_threads = 1
 
+        # Create attributes to store models and metadat
         self.models = {}
         self.model_inputs = {}
         self.model_input_names = {}
@@ -37,6 +39,9 @@ class Model():
             self.models[mdl_name] = ort.InferenceSession(mdl_path, sess_options=sessionOptions, providers=["CPUExecutionProvider"])
             self.model_inputs[mdl_name] = size
             self.model_input_names[mdl_name] = self.models[mdl_name].get_inputs()[0].name
+
+        # Create buffer to store frame predictios
+        self.prediction_buffer = deque(maxlen=5)
 
         # Create AudioFeatures object
         self.preprocessor = AudioFeatures(**kwargs)
@@ -69,7 +74,7 @@ class Model():
 
         return predictions
 
-    def predict(self, x, verify_rounds=None, timing=False):
+    def predict(self, x, threshold=0.5, verify_rounds=None, timing=False):
         """Predict with all of the wakeword models on the input audio frames"""
         # Get audio features
         if timing:
@@ -96,7 +101,8 @@ class Model():
                                     {input_name: self.preprocessor.get_features(self.model_inputs[mdl])}
                                 )[0][0][0]
 
-            if verify_rounds is not None and predictions[mdl] >= 0.5: # make threshold user configurable?
+            if verify_rounds is not None and predictions[mdl] >= threshold \
+                and len(self.prediction_buffer) > 0 and self.prediction_buffer[-1] < threshold:
                 # Use TTA (test time augmentation) to re-check positive predictions
                 tta_predictions = []
                 offset = 200
@@ -106,7 +112,14 @@ class Model():
                                     None,
                                     {input_name: self.preprocessor._get_embeddings(x)[None,]}
                                 )[0][0][0])
-                    predictions[mdl] = reduce(lambda x, y: x*y, tta_predictions)
+                
+                # Update prediction score
+                predictions[mdl] = reduce(lambda x, y: x*y, tta_predictions)
+                self.prediction_buffer.append(predictions[mdl])
+
+            else:
+                # Update prediction buffer
+                self.prediction_buffer.append(predictions[mdl])
 
             if timing:
                 model_end = time.time()
