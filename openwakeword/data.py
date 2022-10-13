@@ -22,6 +22,7 @@ from typing import List
 import numpy as np
 import torch
 from speechbrain.dataio.dataio import read_audio
+from speechbrain.processing.signal_processing import reverberate
 import torchaudio
 import mutagen
 
@@ -244,6 +245,7 @@ def mix_clips_batch(
         snr_low: float=0,
         snr_high: float=0,
         start_index: List[int]=[],
+        rirs: List[str]=[],
         seed: int=None
     ):
     """
@@ -260,6 +262,8 @@ def mix_clips_batch(
         snr_low (float): The low SNR level of the mixing in db
         snr_high (float): The high snr level of the mixing in db
         start_index (List[int]): The starting position (in samples) for the foreground clip to start in the background clip.
+        rirs (List[str]): A list of paths to room impulse response functions (RIR) to convolve with the clips to simulate different recording environments.
+                          Applies a single random from the list RIR file to the entire batch. If empty (the default), nothing is done. 
         seed (int): A random seed
 
     Returns:
@@ -303,6 +307,12 @@ def mix_clips_batch(
             
         mixed_clips_batch = torch.vstack(mixed_clips_batch)
         
+        # Apply reverberation to the batch (from a single RIR file)
+        rir_waveform, sr = torchaudio.load(random.choice(rirs))
+        if rir_waveform.shape[0] > 1:
+            rir_waveform = rir_waveform[random.randint(0,rir_waveform.shape[0]-1), :]
+        mixed_clips_batch = reverberate(mixed_clips_batch, rir_waveform, rescale_amp="avg")
+
         # Normalize clips only if max value is outside of [-1, 1]
         abs_max, _ = torch.max(
             torch.abs(mixed_clips_batch), dim=1, keepdim=True
