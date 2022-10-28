@@ -28,10 +28,9 @@ mic_stream = sounddevice.InputStream(
 )
 
 # Load openwakeword model(s)
-model_name = "hey_mycroft_v1"
+model_name = "alexa_v5"
 model = Model(
     wakeword_model_paths=[os.path.join("../", "openwakeword", "resources", "models", model_name + ".onnx")],
-    input_sizes=[16]
 )
 
 # Run capture loop, checking for hotwords

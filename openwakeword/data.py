@@ -32,7 +32,6 @@ def stack_clips(audio_data, clip_size=16000*2):
     """
     Takes an input list of 1D arrays (of different lengths), concatenates them together,
     and then extracts clips of a uniform size by dividing the combined array.
-    Also converts the resulting array to 16-bit PCM format.
 
     Args:
         audio_data (List[ndarray]): A list of 1D numpy arrays to combine and stack
@@ -53,10 +52,10 @@ def stack_clips(audio_data, clip_size=16000*2):
             chunk = np.hstack((chunk, np.zeros(clip_size - chunk.shape[0])))
         new_examples.append(chunk)
     
-    # Convert to 16-bit PCM data
-    X = (np.array(new_examples).astype(np.float32)*32767).astype(np.int16)
+    # # Convert to 16-bit PCM data
+    # X = (np.array(new_examples).astype(np.float32)*32767).astype(np.int16)
 
-    return X
+    return np.array(new_examples)
 
 def load_audio_clips(files, clip_size=32000):
     """
@@ -135,7 +134,7 @@ def convert_clips(input_files, output_files, sr=16000, ncpu=1):
     pool.starmap(_convert_clip, [(i,j) for i,j in zip(input_files, output_files)])
 
 
-def filter_audio_paths(target_dirs, min_length_secs, max_length_secs, duration_method="size", filetype=None):
+def filter_audio_paths(target_dirs, min_length_secs, max_length_secs, duration_method="size", glob_filter=None):
     """
     Gets the paths of wav files in flat target directories, automatically filtering
     out files below/above the specified length (in seconds). Assumes that all
@@ -151,8 +150,8 @@ def filter_audio_paths(target_dirs, min_length_secs, max_length_secs, duration_m
         duration_method (str): Whether to use the file size ('size'), or header information ('header')
                                to estimate the duration of the audio file. 'size' is generally
                                much faster, but assumes that all files in the target directory
-                               are the same type, sample rate, and bitrate.
-        filetype (str): The format of the audio files to include (by extension)
+                               are the same type, sample rate, and bitrate. If None, durations are not calculated.
+        glob_filter (str): A pathlib glob filter string to select specific files within the target directory
     
     Returns:
         tuple: A list of strings corresponding to the paths of the wav files that met the length criteria,
@@ -164,12 +163,12 @@ def filter_audio_paths(target_dirs, min_length_secs, max_length_secs, duration_m
     for target_dir in target_dirs:
         sizes = []
         dir_paths = []
-        if filetype:
-            dir_paths = [str(i) for i in Path(target_dir).glob(f"**/*{filetype}")]
+        if glob_filter:
+            dir_paths = [str(i) for i in Path(target_dir).glob(glob_filter)]
             file_paths.extend(dir_paths)
             sizes.extend([os.path.getsize(i) for i in dir_paths])
         else:
-            for i in os.scandir(target_dir):
+            for i in tqdm(os.scandir(target_dir)):
                 dir_paths.append(i.path)
                 file_paths.append(i.path)
                 sizes.append(i.stat().st_size)
@@ -180,8 +179,12 @@ def filter_audio_paths(target_dirs, min_length_secs, max_length_secs, duration_m
         elif duration_method == "header":
             durations.extend([get_clip_duration(i) for i in tqdm(dir_paths)])
 
-    filtered = [(i,j) for i,j in zip(file_paths, durations) if j >= min_length_secs and j <= max_length_secs]
-    return [i[0] for i in filtered], [i[1] for i in filtered]
+    if durations != []:
+        filtered = [(i,j) for i,j in zip(file_paths, durations) if j >= min_length_secs and j <= max_length_secs]
+        return [i[0] for i in filtered], [i[1] for i in filtered]
+    else:
+        return file_paths, []
+    
 
 
 def estimate_clip_duration(audio_files: list, sizes: list):
@@ -246,6 +249,7 @@ def mix_clips_batch(
         snr_high: float=0,
         start_index: List[int]=[],
         rirs: List[str]=[],
+        shuffle: bool=True,
         seed: int=None
     ):
     """
@@ -263,7 +267,8 @@ def mix_clips_batch(
         snr_high (float): The high snr level of the mixing in db
         start_index (List[int]): The starting position (in samples) for the foreground clip to start in the background clip.
         rirs (List[str]): A list of paths to room impulse response functions (RIR) to convolve with the clips to simulate different recording environments.
-                          Applies a single random from the list RIR file to the entire batch. If empty (the default), nothing is done. 
+                          Applies a single random from the list RIR file to the entire batch. If empty (the default), nothing is done.
+        shuffle (bool): Whether to shuffle the foreground clips before mixing (default: True)
         seed (int): A random seed
 
     Returns:
@@ -273,6 +278,9 @@ def mix_clips_batch(
     if seed:
         np.random.seed(seed)
         random.seed(seed)
+
+    if shuffle:
+        random.shuffle(foreground_clips)
 
     # Set start indices, if needed
     if not start_index:
@@ -301,17 +309,17 @@ def mix_clips_batch(
             fg_rms, bg_rms = fg.norm(p=2), bg.norm(p=2)
             snr = 10 ** (snr / 20)
             scale = snr * bg_rms / fg_rms
-            start = min(start, combined_size - fg.shape[0])
-            bg[start:start + fg.shape[0]] = bg[start:start + fg.shape[0]] + scale*fg
+            bg[start:start + fg.shape[0]] = bg[start:start + fg.shape[0]] + scale*fg[0:bg.shape[0] - start]
             mixed_clips_batch.append(bg / 2)
             
         mixed_clips_batch = torch.vstack(mixed_clips_batch)
         
         # Apply reverberation to the batch (from a single RIR file)
-        rir_waveform, sr = torchaudio.load(random.choice(rirs))
-        if rir_waveform.shape[0] > 1:
-            rir_waveform = rir_waveform[random.randint(0,rir_waveform.shape[0]-1), :]
-        mixed_clips_batch = reverberate(mixed_clips_batch, rir_waveform, rescale_amp="avg")
+        if rirs:
+            rir_waveform, sr = torchaudio.load(random.choice(rirs))
+            if rir_waveform.shape[0] > 1:
+                rir_waveform = rir_waveform[random.randint(0,rir_waveform.shape[0]-1), :]
+            mixed_clips_batch = reverberate(mixed_clips_batch, rir_waveform, rescale_amp="avg")
 
         # Normalize clips only if max value is outside of [-1, 1]
         abs_max, _ = torch.max(
@@ -323,6 +331,33 @@ def mix_clips_batch(
         mixed_clips_batch = (mixed_clips_batch.numpy()*32767).astype(np.int16)
 
         yield mixed_clips_batch
+
+# Reverberation data augmentation function
+
+def apply_reverb(x, rir_files):
+    """
+    Applies reverberation to the input audio clips
+
+    Args:
+        x (nd.array): A numpy array of shape (batch, audio_samples) containing the audio clips
+        rir_files (Union[str, list]): Either a path to an RIR (room impulse response) file or a list
+                                      of RIR files. If a list, one file will be randomly chosen
+                                      to apply to `x`
+
+    Returns:
+        nd.array: The reverberated audio clips
+    """
+    if isinstance(rir_files, str):
+        rir_waveform, sr = torchaudio.load(rir_files[0])
+    elif isinstance(rir_files, list):
+        rir_waveform, sr = torchaudio.load(random.choice(rir_files))
+
+    # Apply reverberation to the batch (from a single RIR file)
+    if rir_waveform.shape[0] > 1:
+        rir_waveform = rir_waveform[random.randint(0,rir_waveform.shape[0]-1), :]
+    reverbed = reverberate(torch.from_numpy(x), rir_waveform, rescale_amp="avg")
+
+    return reverbed.numpy()
 
 # Load batches of data from mmaped numpy arrays
 class mmap_batch_generator:
@@ -359,8 +394,7 @@ class mmap_batch_generator:
                                     total batch size for each iteration of the generator.
             label_transform_funcs (dict): A dictionary of transformation functions to apply to each batch of labels.
                                           For example, strings can be mapped to integers or one-hot encoded,
-                                          groups of classes can be merged together into one, etc.
-                                    
+                                          groups of classes can be merged together into one, etc.              
         """
         # inputs
         self.data_files = data_files
@@ -368,26 +402,32 @@ class mmap_batch_generator:
         self.data_transform_funcs = data_transform_funcs
         self.label_transform_funcs = label_transform_funcs
         
-        # Get array mmaps and counter object
+        # Get array mmaps and store their shapes
         self.data = {label:np.load(fl, mmap_mode='r') for label, fl in data_files.items()}
         self.data_counter = {label:0 for label in data_files.keys()}
+        self.original_shapes = {label:self.data[label].shape for label in self.data.keys()}
         self.shapes = {label:self.data[label].shape for label in self.data.keys()}
 
-        # Update effective shape of mmpa array based on user-provided transforms
-        for lbl, f in self.data_transform_funcs.items():
-            dummy_data = np.random.random((1, self.shapes[lbl][1], self.shapes[lbl][2]))
-            new_shape = f(dummy_data).shape
-            self.shapes[lbl] = (new_shape[0]*self.shapes[lbl][0], new_shape[1], new_shape[2])
+        # # Update effective shape of mmap array based on user-provided transforms (currently broken)
+        # for lbl, f in self.data_transform_funcs.items():
+        #     dummy_data = np.random.random((1, self.original_shapes[lbl][1], self.original_shapes[lbl][2]))
+        #     new_shape = f(dummy_data).shape
+        #     self.shapes[lbl] = (new_shape[0]*self.original_shapes[lbl][0], new_shape[1], new_shape[2])
 
         # Calculate batch sizes, if the user didn't specify them
         if not self.n_per_class:
             self.n_per_class = {}
             for lbl, shape in self.shapes.items():
+                dummy_data = np.random.random((10, self.shapes[lbl][1], self.shapes[lbl][2]))
+                if self.data_transform_funcs.get(lbl, None):
+                    scale_factor = self.data_transform_funcs.get(lbl, None)(dummy_data).shape[0]/10
+                else:
+                    scale_factor = 1
                 ratio = self.shapes[lbl][0]/sum([i[0] for i in self.shapes.values()])
-                self.n_per_class[lbl] = max(1, int(batch_size*ratio))
+                self.n_per_class[lbl] = max(1, int(int(batch_size*ratio)/scale_factor))
 
         # Get estimated batches per epoch, including the effect of any user-provided transforms
-        batch_size = sum([val for val in self.n_per_class.values()])
+        batch_size = sum([val*scale_factor for val in self.n_per_class.values()])
         batches_per_epoch = sum([i[0] for i in self.shapes.values()])//batch_size
         self.batch_per_epoch = batches_per_epoch
         print("Batches/steps per epoch:", batches_per_epoch)

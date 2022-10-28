@@ -19,7 +19,7 @@ More specifically, openWakeWord aims to:
 # Performance and Evaluation
 
 - Mention 0.5/hour false accept rate for near continuous speech (e.g., dinner party corpus)
-- False-reject rate of 5% means that the chanced of missing two activations is only 0.25%. E.g., if a user on average intentially speaks a wake word/phrase 20 times per day, they would expect to have to try two times once per day, and try three times only once every 20 days (assuming the failed activations aren't correlated and the environmental conditions are such that an activation is expected).
+- False-reject rate of 5% means that the chanced of missing two activations is only 0.25%. E.g., if a user on average intentially speaks a wake word/phrase 20 times per day, they would expect to have to try two times once per day, and try three times only once every 20 days (assuming the failed activations aren't correlated and the environmental conditions are such that an activation would otherwise be expected).
 
 
 # Training New Models
