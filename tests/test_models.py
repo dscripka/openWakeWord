@@ -28,25 +28,41 @@
 
 # Imports
 import openwakeword
-import scipy.io.wavfile
-import pytest
+import os
+from pathlib import Path
+import collections
+
+# Models and corresponding files
+
+test_dict = {
+    "hey_mycroft_v1": ["hey_mycroft_v1_test.wav"],
+    "alexa_v5": ["alexa_v5_test.wav"]
+}
+
 
 # Tests
 class TestModels:
-    @pytest.fixture(scope="class")
-    def hey_jane_clip(self):
-        sr, dat = scipy.io.wavfile.read("tests/data/hey_jane.wav", "rb")
-        return dat
-
-    def test_hey_jane(self, hey_jane_clip):
-        model = openwakeword.Model(
-            wakeword_model_paths=["openwakeword/resources/models/hey_jane.onnx"],
-            input_sizes=[16]
+    def test_models(self):
+        models = [str(i) for i in Path(
+                    os.path.join("openwakeword", "resources", "models")
+                  ).glob("**/*.onnx")
+                  if "embedding" not in str(i) and "melspec" not in str(i)]
+        owwModel = openwakeword.Model(
+            wakeword_model_paths=models,
         )
 
-        step_size = 1280
-        predictions = []
-        for i in range(0, hey_jane_clip.shape[0]-step_size, step_size):
-            predictions.append(model.predict(hey_jane_clip[i:i+step_size])["hey_jane"])
-        
-        assert max(predictions) > 0.5
+        for model, clips in test_dict.items():
+            for clip in clips:
+                # Get predictions for reach frame in the clip
+                predictions = owwModel.predict_clip(os.path.join("tests", "data", clip))
+
+                # Make predictions dictionary flatter
+                predictions_flat = collections.defaultdict(list)
+                [predictions_flat[key].append(i[key]) for i in predictions for key in i.keys()]
+
+            # Check scores against default threshold (0.5), skipping first prediction as it is innaccurate
+            for key in predictions_flat.keys():
+                if key in clip:
+                    assert max(predictions_flat[key][1:]) >= 0.5
+                else:
+                    assert max(predictions_flat[key][1:]) < 0.5

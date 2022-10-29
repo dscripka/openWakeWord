@@ -21,12 +21,13 @@ import statistics
 import wave
 import os
 from collections import deque, defaultdict
-from typing import List
 from functools import partial
 import time
 import pprint
-from typing import List, Union
+from typing import List, Union, DefaultDict, Dict
 
+
+# Define main model class
 class Model():
     """
     The main model class for openWakeWord. Creates a model object with the shared audio pre-processer
@@ -51,41 +52,44 @@ class Model():
         self.model_input_names = {}
         for mdl_path in wakeword_model_paths:
             mdl_name = mdl_path.split(os.path.sep)[-1].strip(".onnx")
-            self.models[mdl_name] = ort.InferenceSession(mdl_path, sess_options=sessionOptions, providers=["CPUExecutionProvider"])
+            self.models[mdl_name] = ort.InferenceSession(mdl_path, sess_options=sessionOptions,
+                                                         providers=["CPUExecutionProvider"])
             self.model_inputs[mdl_name] = self.models[mdl_name].get_inputs()[0].shape[1]
             self.model_input_names[mdl_name] = self.models[mdl_name].get_inputs()[0].name
 
         # Create buffer to store frame predictios
-        self.prediction_buffer = defaultdict(partial(deque, maxlen=5))
+        self.prediction_buffer: DefaultDict[str, deque] = defaultdict(partial(deque, maxlen=5))
 
         # Create AudioFeatures object
         self.preprocessor = AudioFeatures(**kwargs)
 
-
-    def predict(self, x: Union[np.ndarray, List], median_smooth: bool=False, timing: bool=False):
+    def predict(self, x: Union[np.ndarray, List], median_smooth: bool = False, timing: bool = False):
         """Predict with all of the wakeword models on the input audio frames
-        
+
         Args:
-            x (Union[ndarray, List]): The input audio data to predict on with the models. Must be 1280 samples of 16khz, 16-bit audio data.
-            median_smooth (bool): Whether to apply a running median smooth of the last three predictions before returning a score.
-                                  Can reduce false-positive productions at the cost of a lower true-positive rate.
-            timing (bool): Whether to print timing information of the models. Can be useful to debug and assess how efficiently models
-                           are running the current hardware.
+            x (Union[ndarray, List]): The input audio data to predict on with the models. Must be 1280
+                                      samples of 16khz, 16-bit audio data.
+            median_smooth (bool): Whether to apply a running median smooth of the last three predictions
+                                  before returning a score. Can reduce false-positive productions at the
+                                  cost of a lower true-positive rate.
+            timing (bool): Whether to print timing information of the models. Can be useful to debug and
+                           assess how efficiently models are running the current hardware.
 
         Returns:
-            dict: A dictionary of scores between 0 and 1 for each model, where 0 indicates no wake-word/wake-phrase detected
+            dict: A dictionary of scores between 0 and 1 for each model, where 0 indicates no
+                  wake-word/wake-phrase detected
         """
         # Get audio features
         if timing:
-            timing_dict = {}
+            timing_dict: Dict[str, Dict] = {}
             timing_dict["models"] = {}
             feature_start = time.time()
-        
+
         self.preprocessor(x)
 
         if timing:
             feature_end = time.time()
-            timing_dict["preprocessor"] = feature_end - feature_start
+            timing_dict["models"]["preprocessor"] = feature_end - feature_start
 
         # Get predictions from model(s)
         predictions = {}
@@ -113,13 +117,12 @@ class Model():
                 timing_dict["models"][mdl] = model_end - model_start
 
         if timing:
-            pp = pprint.PrettyPrinter().pprint(timing_dict)
+            pprint.PrettyPrinter().pprint(timing_dict)
             return predictions
         else:
             return predictions
 
-
-    def predict_clip(self, clip: str, padding: bool=True, **kwargs):
+    def predict_clip(self, clip: str, padding: bool = True, **kwargs):
         """Predict on an full audio clip, simulating streaming prediction.
         The input clip must bit a 16-bit, 16 khz, single-channel WAV file.
 
@@ -128,7 +131,7 @@ class Model():
             padding (bool): Whether to pad the clip on either side with 1 second of silence
                             to make sure that short clips can be processed correctly (default: True)
             kwargs: Any keyword arguments to pass to the class `predict` method
-        
+
         Returns:
             list: A list containing the frame-level prediction dictionaries for the audio clip
         """
@@ -137,7 +140,7 @@ class Model():
             # Load WAV clip frames
             data = np.frombuffer(f.readframes(f.getnframes()), dtype=np.int16)
             if padding:
-                data = np.concatenate((np.zeros(32000), data, np.zeros(32000)))
+                data = np.concatenate((np.zeros(16000).astype(np.int16), data, np.zeros(16000).astype(np.int16)))
 
         # Iterate through clip, getting predictions
         predictions = []
