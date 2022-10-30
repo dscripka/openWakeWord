@@ -14,6 +14,7 @@ setuptools.setup(
                     'pytest>=7.2.0,<8',
                     'pytest-cov>=2.10.1,<3',
                     'pytest-flake8>=1.1.1,<2',
+                    'flake8>=4.0,<4.1',
                     'pytest-mypy>=0.10.0,<1'
                 ],
         'full': [
