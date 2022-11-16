@@ -57,9 +57,9 @@ Future releases of openWakeWord will aim to stay aligned with the goals, even wh
 
 openWakeWord comes with pre-trained models for common words & phrases. Currently, only English models are supported, but they should be reasonably robust across different types speaker accents and pronunciation.
 
-Each model aims to have false-reject rates of less than 5% and false-accept rates of less than 0.5/hr on the evaluation data to be considered minimally viable (see [Performance & Evaluation]() for definitions and details). These levels are chosen so that, for example, a user could be expected to have a extended conversation of several hours with maybe a single false activation, and a failed activation only 1/20 attempts (and a failed *second* activation only 1/400 attempts).
+Each model aims to have false-reject rates of less than 5% and false-accept rates of less than 0.5/hr on the evaluation data to be considered minimally viable (see [Performance & Evaluation]() for definitions and details). These levels are subjective, but hopefully are below the annoyance threshold where the average user frustrated with a system that often misses intended activations and/or causes disruption by activating too frequently at undesired times. For example, at these rates a user could expect to have a group gathering with conversations of several hours with at most 1-2 false activations, and a failed activation in only 1/20 attempts (and a failed *second* attempted activation in only 1/400 attempts). 
 
-The table below lists each model and the false-reject rate @ 0.5 false accepts/hr, along with the recommended threshold value to obtain that performance (though this should be adjusted to your use-case). See the individual [model pages]() in the documentation for the full false-reject/false-accept curves across different thresholds.
+The table below lists each model and the false-reject rate @ 0.5 false accepts/hr, along with the recommended threshold value to obtain that performance (though this should be manually adjusted to your environment and usage patterns). See the individual [model pages]() in the documentation for the full false-reject/false-accept curves across different thresholds.
 
 | Word/Phrase | False-Reject Rate | False-Accepts per Hour | Recommended Score Threshold |
 | ------------- | ------------- | ------------- | ------------- |
@@ -95,27 +95,29 @@ For openWakeWord, evaluation follows two principles:
 
 While other wakeword evaluation standards [do exist](https://github.com/Picovoice/wake-word-benchmark), for openWakeWord it was decided that a more challenging evaluation would better indicate what users could expect in practice. Specifically:
 
-1) *false-reject* rates are calculated from otherwise clean examples that are mixed with the HOME background noise from the DEMAND dataset at an SNR of 10 dB, and have simulated reverberation applied using the room-impulse-response functions from the [?] dataset. Any manually collected data is done in realistic environments that include background noise, varying microphone distances, and speaker direction.
+1) *false-reject* rates are calculated from otherwise clean recordings of the wakeword that are mixed with the HOME background noise from the [DEMAND](https://zenodo.org/record/1227121#.Y3OSG77MJhE) dataset at an SNR of 10 dB, and have simulated reverberation applied using the room-impulse-response functions from the [?] dataset. Any manually collected data was captured in realistic environments that include background noise, varying microphone distances, and speaker direction.
 
 2) *false-accept* rates are determined by using the [Dinner Party Corpus](https://www.amazon.science/publications/dipco-dinner-party-corpus) dataset. Representing ~5.5 hours of far-field speech, background music, and miscellaneous noise, this sets a realistic goal for how many false activations might occur in a similar situation.
 
-To illustrate how openWakeWord can produce very capable models, the false-accept/false-reject curves for the included `"alexa"` model is shown below along with the performance of a strong commercial competitor, [Picovoice Porcupine](https://picovoice.ai/platform/porcupine/). Other existing open-source wakeword engines (e.g., [Snowboy](https://github.com/Kitt-AI/snowboy), [PocketSphinx](https://github.com/cmusphinx/pocketsphinx), etc.) are not included as they are either no longer maintained or demonstrate performance significantly below that that Porcupine. The positive test examples used were those included in [Picovoice's](https://github.com/Picovoice/wake-word-benchmark) repository, a fantastic resource that they have provided freely to the community.
+To illustrate how openWakeWord can produce very capable models, the false-accept/false-reject curves for the included `"alexa"` model is shown below along with the performance of a strong commercial competitor, [Picovoice Porcupine](https://picovoice.ai/platform/porcupine/). Other existing open-source wakeword engines (e.g., [Snowboy](https://github.com/Kitt-AI/snowboy), [PocketSphinx](https://github.com/cmusphinx/pocketsphinx), etc.) are not included as they are either no longer maintained or demonstrate performance significantly below that that Porcupine. The positive test examples used were those included in [Picovoice's](https://github.com/Picovoice/wake-word-benchmark) repository, a fantastic resource that they have freely provided to the community.
 
 - roc curve 1
 
-As a second illustration, the false-accept/false-reject rate of the included `"hey-mycroft"` model is shown below along with the performance of Picovoice Porcupine and [Mycroft Precise](https://mycroft-ai.gitbook.io/docs/mycroft-technologies/precise). In this case, the positive test examples were manually collected from a male speaker with a relatively neutral American english accent in realistic home recording scenarios (e.g., a small room with a desk fan running, an unfinished basement with an echo, a kitchen with water running, etc.)
+As a second illustration, the false-accept/false-reject rate of the included `"hey mycroft"` model is shown below along with the performance of Picovoice Porcupine (using a custom model) and [Mycroft Precise](https://mycroft-ai.gitbook.io/docs/mycroft-technologies/precise). In this case, the positive test examples were manually collected from a male speaker with a relatively neutral American english accent in realistic home recording scenarios (e.g., a small room with a desk fan running, an unfinished basement with an echo, a kitchen with water running, etc.)
 
 - roc curve 2 (for "hey mycroft")
+
+As an added feature, the included pre-trained models also seems to respond reasonably well to wakewords and phrases that are [whispered](https://en.wikipedia.org/wiki/Whispering). This is surprising behavior, as the text-to-speech models used for producing training data generally do not create synthetic speech that has acoustic qualities similar to whispering. It is possible that the pre-training of the base embedding model (see the [Model Architecture]() section) included examples of whispering that transfer into the fine-tuned wakeword models.
 
 If you are aware of another open-source wakeword/phrase library that should be added to this evaluation, or have suggestions on how to improve it, please open an issue! We are eager to continue improving openWakeWord by learning how others are approaching this problem.
 
 # Training New Models
 
-There new models is conceptually simple:
+Training new models is conceptually simple:
 
 1) Generate new training data for the desired wakeword/phrase using open-source STT systems. For openWakeWord, extensive testing was done to determine which models produce synthetic speech that results in models with strong real-world performance. These models are provided in a [separate repository](). The number of generated examples require can vary, a minimum of several thousand is recommended and performance seems to increase smoothly with increasing dataset size.
 
-2) Collect negative data (e.g., audio where the wakeword/phrase is not present) to help the model to have a low false-accept rate. This also benefits from scale, and the [included models](#-Pre-Trained-Models) where all trained with ~30,000 hours of negative data across speech, noice, and music. See the [Documentation]() for more details on the training data curation and preparation.
+2) Collect negative data (e.g., audio where the wakeword/phrase is not present) to help the model to have a low false-accept rate. This also benefits from scale, and the [included models](#-Pre-Trained-Models) where all trained with ~30,000 hours of negative data representing speech, noise, and music. See the [Documentation]() for more details on the training data curation and preparation.
 
 # Language Support
 
