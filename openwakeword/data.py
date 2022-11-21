@@ -483,6 +483,7 @@ class mmap_batch_generator:
 
             return np.vstack(X), np.array(y)
 
+
 # Function to remove empty rows from the end of a mmap array
 def trim_mmap(mmap_path):
     """
@@ -502,11 +503,11 @@ def trim_mmap(mmap_path):
         i -= 1
 
     N_new = mmap_file1.shape[0] + i + 1
-        
+
     # Create new mmap_file and copy over data in batches
     output_file2 = mmap_path.strip(".npy") + "2.npy"
     mmap_file2 = open_memmap(output_file2, mode='w+', dtype=np.float32,
-                            shape=(N_new, mmap_file1.shape[1], mmap_file1.shape[2]))
+                             shape=(N_new, mmap_file1.shape[1], mmap_file1.shape[2]))
 
     for i in tqdm(range(0, mmap_file1.shape[0], 1024), total=mmap_file1.shape[0]//1024):
         if i + 1024 > N_new:

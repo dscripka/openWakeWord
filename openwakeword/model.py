@@ -15,9 +15,9 @@
 # Imports
 import numpy as np
 import onnxruntime as ort
+import openwakeword
 from openwakeword.utils import AudioFeatures
 
-import statistics
 import wave
 import os
 import json
@@ -34,12 +34,13 @@ class Model():
     The main model class for openWakeWord. Creates a model object with the shared audio pre-processer
     and for arbitrarily many custom wake word/wake phrase models.
     """
-    def __init__(self, wakeword_model_paths: List[str], **kwargs):
+    def __init__(self, wakeword_model_paths: List[str] = [], **kwargs):
         """
         Initialize the openWakeWord model object.
 
         Args:
-            wakeword_model_paths (List[str]): A list of paths of ONNX models to load into the openWakeWord model object
+            wakeword_model_paths (List[str]): A list of paths of ONNX models to load into the openWakeWord model object.
+                                              If not provided, will load all of the pre-trained models.
         """
 
         # Initialize the ONNX models and store them
@@ -47,14 +48,20 @@ class Model():
         sessionOptions.inter_op_num_threads = 1
         sessionOptions.intra_op_num_threads = 1
 
+        # Get model paths for pre-trained models if user doesn't provide models to load
+        if wakeword_model_paths == []:
+            wakeword_model_paths = openwakeword.get_pretrained_model_paths()
+            wakeword_model_names = list(openwakeword.models.keys())
+        else:
+            wakeword_model_names = [os.path.basename(i.strip(".onnx")) for i in wakeword_model_paths]
+
         # Create attributes to store models and metadat
         self.models = {}
         self.model_inputs = {}
         self.model_outputs = {}
         self.class_mapping = {}
         self.model_input_names = {}
-        for mdl_path in wakeword_model_paths:
-            mdl_name = mdl_path.split(os.path.sep)[-1].strip(".onnx")
+        for mdl_path, mdl_name in zip(wakeword_model_paths, wakeword_model_names):
             self.models[mdl_name] = ort.InferenceSession(mdl_path, sess_options=sessionOptions,
                                                          providers=["CPUExecutionProvider"])
             self.model_inputs[mdl_name] = self.models[mdl_name].get_inputs()[0].shape[1]
@@ -96,10 +103,11 @@ class Model():
             x (Union[ndarray, List]): The input audio data to predict on with the models. Must be 1280
                                       samples of 16khz, 16-bit audio data.
             patience (dict): How many consecutive frames (of 1280 samples or 80 ms) above the threshold that must
-                             be observed before the current frame will be returned as non-zero. 
+                             be observed before the current frame will be returned as non-zero.
                              Must be provided as an a dictionary where the keys are the
-                             model names and the values are the number of frames. Can reduce false-positive detections at the
-                             cost of a lower true-positive rate. By default, this behavior is disabled.
+                             model names and the values are the number of frames. Can reduce false-positive
+                             detections at the cost of a lower true-positive rate.
+                             By default, this behavior is disabled.
             threshold (dict): The threshold values to use when the `patience` behavior is enabled.
                               Must be provided as an a dictionary where the keys are the
                               model names and the values are the thresholds.

@@ -27,11 +27,8 @@ mic_stream = sounddevice.InputStream(
     dtype = np.int16,
 )
 
-# Load openwakeword model(s)
-model_name = "alexa_v5"
-model = Model(
-    wakeword_model_paths=[os.path.join("../", "openwakeword", "resources", "models", model_name + ".onnx")],
-)
+# Load pre-trained openwakeword models
+owwModel = Model()
 
 # Run capture loop, checking for hotwords
 if __name__ == "__main__":
@@ -39,20 +36,26 @@ if __name__ == "__main__":
     mic_stream.start()
 
     # Create a prediction buffer
-    prediction_buffer = [0]*30
     while True:
         # Get audio
         audio, overflowed = mic_stream.read(1280)
         audio = audio.squeeze()
 
         # Feed to openWakeWord model
-        prediction = model.predict(audio)
-        prediction_buffer = prediction_buffer[1:] + [round(prediction[model_name], 2)]
-        
-        # Plot predictions in graph
+        prediction = owwModel.predict(audio)
+
+        # Get predictions from prediction buffers and plot
         plt.cld()
         plt.clt()
-        plt.plot(prediction_buffer)
+        for mdl in owwModel.prediction_buffer.keys():
+            # Plot scores in graph
+            scores = list(owwModel.prediction_buffer[mdl])
+            plt.plot(scores)
+
+            # Plot text showing name of model with scores >= 0.5 (default threshold)
+            if max(scores) >= 0.5:
+                plt.text(mdl, 15, 0.9, alignment="center", color = "blue", style="bold")
+
         plt.ylim(0,1)
         plt.show()
         plt.sleep(0.005)

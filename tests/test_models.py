@@ -33,30 +33,24 @@ import numpy as np
 from pathlib import Path
 import collections
 
-# Define models and corresponding files for testing
-test_dict = {
-    "hey_mycroft_v1": ["hey_mycroft_v1_test.wav"],
-    "alexa_v5": ["alexa_v5_test.wav"]
-}
-
 
 # Tests
 class TestModels:
     def test_models(self):
         # Load model
-        models = [str(i) for i in Path(
-                    os.path.join("openwakeword", "resources", "models")
-                  ).glob("**/*.onnx")
-                  if "embedding" not in str(i) and "melspec" not in str(i)]
-        owwModel = openwakeword.Model(
-            wakeword_model_paths=models,
-        )
+        owwModel = openwakeword.Model()
+
+        # Get clips for each model (assumes that test clips will have the model name in the filename)
+        test_dict = {}
+        for mdl_name in owwModel.models.keys():
+            all_clips = [str(i) for i in Path(os.path.join("tests", "data")).glob("*.wav")]
+            test_dict[mdl_name] = [i for i in all_clips if mdl_name in i]
 
         # Predict
         for model, clips in test_dict.items():
             for clip in clips:
                 # Get predictions for reach frame in the clip
-                predictions = owwModel.predict_clip(os.path.join("tests", "data", clip))
+                predictions = owwModel.predict_clip(clip)
                 owwModel.reset()  # reset after each clip to ensure independent results
 
                 # Make predictions dictionary flatter
@@ -68,35 +62,6 @@ class TestModels:
                 if key in clip:
                     assert max(predictions_flat[key]) >= 0.5
                 else:
-                    assert max(predictions_flat[key]) < 0.5
-
-    def test_models_with_median_smooth(self):
-        # Load models
-        models = [str(i) for i in Path(
-                    os.path.join("openwakeword", "resources", "models")
-                  ).glob("**/*.onnx")
-                  if "embedding" not in str(i) and "melspec" not in str(i)]
-        owwModel = openwakeword.Model(
-            wakeword_model_paths=models,
-        )
-
-        # Predict with median smooth
-        for model, clips in test_dict.items():
-            for clip in clips:
-                # Get predictions for reach frame in the clip
-                predictions = owwModel.predict_clip(os.path.join("tests", "data", clip), median_smooth=True)
-                owwModel.reset()  # reset after each clip to ensure independent results
-
-                # Make predictions dictionary flatter
-                predictions_flat = collections.defaultdict(list)
-                [predictions_flat[key].append(i[key]) for i in predictions for key in i.keys()]
-
-            # Check scores against default threshold (0.5)
-            for key in predictions_flat.keys():
-                if key in clip:
-                    assert max(predictions_flat[key]) >= 0.5
-                else:
-                    print(key, clip)
                     assert max(predictions_flat[key]) < 0.5
 
     def test_models_with_timing(self):
