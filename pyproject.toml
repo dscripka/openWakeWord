@@ -3,7 +3,7 @@ requires = ["setuptools>=42"]
 build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
-addopts = "--cov=openwakeword --flake8 --mypy --mypy-ignore-missing-imports"
+addopts = "--cov=openwakeword --cov-report term-missing --flake8 --mypy --mypy-ignore-missing-imports"
 flake8-max-line-length = "120"
 testpaths = [
     "tests",

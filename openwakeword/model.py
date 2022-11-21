@@ -20,6 +20,7 @@ from openwakeword.utils import AudioFeatures
 import statistics
 import wave
 import os
+import json
 from collections import deque, defaultdict
 from functools import partial
 import time
@@ -49,29 +50,59 @@ class Model():
         # Create attributes to store models and metadat
         self.models = {}
         self.model_inputs = {}
+        self.model_outputs = {}
+        self.class_mapping = {}
         self.model_input_names = {}
         for mdl_path in wakeword_model_paths:
             mdl_name = mdl_path.split(os.path.sep)[-1].strip(".onnx")
             self.models[mdl_name] = ort.InferenceSession(mdl_path, sess_options=sessionOptions,
                                                          providers=["CPUExecutionProvider"])
             self.model_inputs[mdl_name] = self.models[mdl_name].get_inputs()[0].shape[1]
+            self.model_outputs[mdl_name] = self.models[mdl_name].get_outputs()[0].shape[1]
+            output_name = self.models[mdl_name].get_outputs()[0].name
+            if "{" in output_name:
+                self.class_mapping[mdl_name] = json.loads(output_name)
+            else:
+                self.class_mapping[mdl_name] = mdl_name
             self.model_input_names[mdl_name] = self.models[mdl_name].get_inputs()[0].name
 
         # Create buffer to store frame predictios
-        self.prediction_buffer: DefaultDict[str, deque] = defaultdict(partial(deque, maxlen=5))
+        self.prediction_buffer: DefaultDict[str, deque] = defaultdict(partial(deque, maxlen=30))
 
         # Create AudioFeatures object
         self.preprocessor = AudioFeatures(**kwargs)
 
-    def predict(self, x: Union[np.ndarray, List], median_smooth: bool = False, timing: bool = False):
+    def get_parent_model_from_label(self, label):
+        """Gets the parent model associated with a given prediction label"""
+        parent_model = ""
+        for mdl in self.class_mapping.keys():
+            if isinstance(self.class_mapping[mdl], dict):
+                if label in self.class_mapping[mdl].values():
+                    parent_model = mdl
+            else:
+                if label == self.class_mapping[mdl]:
+                    parent_model = self.class_mapping[mdl]
+
+        return parent_model
+
+    def reset(self):
+        """Reset the prediction buffer"""
+        self.prediction_buffer = defaultdict(partial(deque, maxlen=30))
+
+    def predict(self, x: Union[np.ndarray, List], patience: dict = {}, threshold: dict = {}, timing: bool = False):
         """Predict with all of the wakeword models on the input audio frames
 
         Args:
             x (Union[ndarray, List]): The input audio data to predict on with the models. Must be 1280
                                       samples of 16khz, 16-bit audio data.
-            median_smooth (bool): Whether to apply a running median smooth of the last three predictions
-                                  before returning a score. Can reduce false-positive productions at the
-                                  cost of a lower true-positive rate.
+            patience (dict): How many consecutive frames (of 1280 samples or 80 ms) above the threshold that must
+                             be observed before the current frame will be returned as non-zero. 
+                             Must be provided as an a dictionary where the keys are the
+                             model names and the values are the number of frames. Can reduce false-positive detections at the
+                             cost of a lower true-positive rate. By default, this behavior is disabled.
+            threshold (dict): The threshold values to use when the `patience` behavior is enabled.
+                              Must be provided as an a dictionary where the keys are the
+                              model names and the values are the thresholds.
             timing (bool): Whether to print timing information of the models. Can be useful to debug and
                            assess how efficiently models are running the current hardware.
 
@@ -100,21 +131,38 @@ class Model():
                 model_start = time.time()
 
             # Run model
-            predictions[mdl] = self.models[mdl].run(
+            prediction = self.models[mdl].run(
                                     None,
                                     {input_name: self.preprocessor.get_features(self.model_inputs[mdl])}
-                                )[0][0][0]
+                                )
+            if self.model_outputs[mdl] == 1:
+                predictions[mdl] = prediction[0][0][0]
+            else:
+                for int_label, cls in self.class_mapping[mdl].items():
+                    predictions[cls] = prediction[0][0][int(int_label)]
 
-            # Update prediction buffer
-            self.prediction_buffer[mdl].append(predictions[mdl])
+            # Update prediction buffer, and zero predictions for first 5 frames during model initialization
+            for mdl in predictions.keys():
+                if len(self.prediction_buffer[mdl]) < 5:
+                    predictions[mdl] = 0.0
+                self.prediction_buffer[mdl].append(predictions[mdl])
 
-            # (Optionally) Smooth model predictions with simple median calculate of last three predictions
-            if median_smooth:
-                predictions[mdl] = statistics.median(list(self.prediction_buffer[mdl])[-3:])
-
+            # Get timing information
             if timing:
                 model_end = time.time()
                 timing_dict["models"][mdl] = model_end - model_start
+
+        # Update scores based on thresholds or patience arguments
+        if patience != {}:
+            if threshold == {}:
+                raise ValueError("Error! When using the `patience` argument, threshold "
+                                 "values must be provided via the `threshold` argument!")
+            for mdl in predictions.keys():
+                parent_model = self.get_parent_model_from_label(mdl)
+                if parent_model in patience.keys():
+                    scores = np.array(self.prediction_buffer[mdl])[-patience[parent_model]:]
+                    if (scores >= threshold[parent_model]).sum() < patience[parent_model]:
+                        predictions[mdl] = 0.0
 
         if timing:
             pprint.PrettyPrinter().pprint(timing_dict)
@@ -122,14 +170,14 @@ class Model():
         else:
             return predictions
 
-    def predict_clip(self, clip: str, padding: bool = True, **kwargs):
+    def predict_clip(self, clip: str, padding: int = 1, **kwargs):
         """Predict on an full audio clip, simulating streaming prediction.
         The input clip must bit a 16-bit, 16 khz, single-channel WAV file.
 
         Args:
             clip (str): The path to a 16-bit PCM, 16 khz, single-channel WAV file
-            padding (bool): Whether to pad the clip on either side with 1 second of silence
-                            to make sure that short clips can be processed correctly (default: True)
+            padding (int): How many seconds of silence to pad the start/end of the clip with
+                            to make sure that short clips can be processed correctly (default: 1)
             kwargs: Any keyword arguments to pass to the class `predict` method
 
         Returns:
@@ -140,7 +188,13 @@ class Model():
             # Load WAV clip frames
             data = np.frombuffer(f.readframes(f.getnframes()), dtype=np.int16)
             if padding:
-                data = np.concatenate((np.zeros(16000).astype(np.int16), data, np.zeros(16000).astype(np.int16)))
+                data = np.concatenate(
+                    (
+                        np.zeros(16000*padding).astype(np.int16),
+                        data,
+                        np.zeros(16000*padding).astype(np.int16)
+                    )
+                )
 
         # Iterate through clip, getting predictions
         predictions = []

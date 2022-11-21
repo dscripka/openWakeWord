@@ -21,6 +21,7 @@ from tqdm import tqdm
 from typing import List
 import numpy as np
 import torch
+from numpy.lib.format import open_memmap
 from speechbrain.dataio.dataio import read_audio
 from speechbrain.processing.signal_processing import reverberate
 import torchaudio
@@ -335,6 +336,9 @@ def mix_clips_batch(
         # Convert to 16-bit PCM audio
         mixed_clips_batch = (mixed_clips_batch.numpy()*32767).astype(np.int16)
 
+        # Remove any clips that are silent (happens rarely when mixing/reverberating)
+        mixed_clips_batch = mixed_clips_batch[np.where(mixed_clips_batch.max(axis=1) != 0)[0]]
+
         yield mixed_clips_batch
 
 
@@ -415,7 +419,7 @@ class mmap_batch_generator:
         self.data_transform_funcs = data_transform_funcs
         self.label_transform_funcs = label_transform_funcs
 
-        # Get array mmaps and store their shapes
+        # Get array mmaps and store their shapes (but load files < 1 GB total size into memory)
         self.data = {label: np.load(fl, mmap_mode='r') for label, fl in data_files.items()}
         self.data_counter = {label: 0 for label in data_files.keys()}
         self.original_shapes = {label: self.data[label].shape for label in self.data.keys()}
@@ -456,7 +460,7 @@ class mmap_batch_generator:
                 # Restart at zeroth index if an array reaches the end
                 if self.data_counter[label] >= self.shapes[label][0]:
                     self.data_counter[label] = 0
-                    self.data[label] = np.load(self.data_files[label], mmap_mode='r')
+                    # self.data[label] = np.load(self.data_files[label], mmap_mode='r')
 
                 # Get data from mmaped file
                 x = self.data[label][self.data_counter[label]:self.data_counter[label]+n]
@@ -478,3 +482,42 @@ class mmap_batch_generator:
                 y.extend(y_batch)
 
             return np.vstack(X), np.array(y)
+
+# Function to remove empty rows from the end of a mmap array
+def trim_mmap(mmap_path):
+    """
+    Trims blank rows from the end of a mmaped numpy array by creates new mmap array without the blank rows.
+    Note that a copy is created and disk usage will briefly double as the function runs.
+
+    Args:
+        mmap_path (str): The path to mmap array file to trim
+
+    Returns:
+        None
+    """
+    # Identify the last full row in the mmaped file
+    mmap_file1 = np.load(mmap_path, mmap_mode='r')
+    i = -1
+    while np.all(mmap_file1[i, :, :] == 0):
+        i -= 1
+
+    N_new = mmap_file1.shape[0] + i + 1
+        
+    # Create new mmap_file and copy over data in batches
+    output_file2 = mmap_path.strip(".npy") + "2.npy"
+    mmap_file2 = open_memmap(output_file2, mode='w+', dtype=np.float32,
+                            shape=(N_new, mmap_file1.shape[1], mmap_file1.shape[2]))
+
+    for i in tqdm(range(0, mmap_file1.shape[0], 1024), total=mmap_file1.shape[0]//1024):
+        if i + 1024 > N_new:
+            mmap_file2[i:N_new] = mmap_file1[i:N_new].copy()
+            mmap_file2.flush()
+        else:
+            mmap_file2[i:i+1024] = mmap_file1[i:i+1024].copy()
+            mmap_file2.flush()
+
+    # Remove old mmaped file
+    os.remove(mmap_path)
+
+    # Rename new mmap file to match original
+    os.rename(output_file2, mmap_path)

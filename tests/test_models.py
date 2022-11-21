@@ -29,11 +29,11 @@
 # Imports
 import openwakeword
 import os
+import numpy as np
 from pathlib import Path
 import collections
 
-# Models and corresponding files
-
+# Define models and corresponding files for testing
 test_dict = {
     "hey_mycroft_v1": ["hey_mycroft_v1_test.wav"],
     "alexa_v5": ["alexa_v5_test.wav"]
@@ -43,6 +43,7 @@ test_dict = {
 # Tests
 class TestModels:
     def test_models(self):
+        # Load model
         models = [str(i) for i in Path(
                     os.path.join("openwakeword", "resources", "models")
                   ).glob("**/*.onnx")
@@ -51,18 +52,60 @@ class TestModels:
             wakeword_model_paths=models,
         )
 
+        # Predict
         for model, clips in test_dict.items():
             for clip in clips:
                 # Get predictions for reach frame in the clip
                 predictions = owwModel.predict_clip(os.path.join("tests", "data", clip))
+                owwModel.reset()  # reset after each clip to ensure independent results
 
                 # Make predictions dictionary flatter
                 predictions_flat = collections.defaultdict(list)
                 [predictions_flat[key].append(i[key]) for i in predictions for key in i.keys()]
 
-            # Check scores against default threshold (0.5), skipping first prediction as it is innaccurate
+            # Check scores against default threshold (0.5)
             for key in predictions_flat.keys():
                 if key in clip:
-                    assert max(predictions_flat[key][1:]) >= 0.5
+                    assert max(predictions_flat[key]) >= 0.5
                 else:
-                    assert max(predictions_flat[key][1:]) < 0.5
+                    assert max(predictions_flat[key]) < 0.5
+
+    def test_models_with_median_smooth(self):
+        # Load models
+        models = [str(i) for i in Path(
+                    os.path.join("openwakeword", "resources", "models")
+                  ).glob("**/*.onnx")
+                  if "embedding" not in str(i) and "melspec" not in str(i)]
+        owwModel = openwakeword.Model(
+            wakeword_model_paths=models,
+        )
+
+        # Predict with median smooth
+        for model, clips in test_dict.items():
+            for clip in clips:
+                # Get predictions for reach frame in the clip
+                predictions = owwModel.predict_clip(os.path.join("tests", "data", clip), median_smooth=True)
+                owwModel.reset()  # reset after each clip to ensure independent results
+
+                # Make predictions dictionary flatter
+                predictions_flat = collections.defaultdict(list)
+                [predictions_flat[key].append(i[key]) for i in predictions for key in i.keys()]
+
+            # Check scores against default threshold (0.5)
+            for key in predictions_flat.keys():
+                if key in clip:
+                    assert max(predictions_flat[key]) >= 0.5
+                else:
+                    print(key, clip)
+                    assert max(predictions_flat[key]) < 0.5
+
+    def test_models_with_timing(self):
+        models = [str(i) for i in Path(
+                    os.path.join("openwakeword", "resources", "models")
+                  ).glob("**/*.onnx")
+                  if "embedding" not in str(i) and "melspec" not in str(i)]
+        owwModel = openwakeword.Model(
+            wakeword_model_paths=models,
+        )
+
+        owwModel.predict(np.zeros(1280), timing=True)
