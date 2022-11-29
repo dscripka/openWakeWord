@@ -107,9 +107,21 @@ As a second illustration, the false-accept/false-reject rate of the included `"h
 
 - roc curve 2 (for "hey mycroft")
 
-As an added feature, the included pre-trained models also seems to respond reasonably well to wakewords and phrases that are [whispered](https://en.wikipedia.org/wiki/Whispering). This is surprising behavior, as the text-to-speech models used for producing training data generally do not create synthetic speech that has acoustic qualities similar to whispering. It is possible that the pre-training of the base embedding model (see the [Model Architecture]() section) included examples of whispering that transfer into the fine-tuned wakeword models.
-
 If you are aware of another open-source wakeword/phrase library that should be added to this evaluation, or have suggestions on how to improve it, please open an issue! We are eager to continue improving openWakeWord by learning how others are approaching this problem.
+
+## Extra Performance Benefits
+
+Likely due to a combination of variability in the generated speech and the extensive pre-training from Google, the openWakeWord models also demonstrate some additional performance benefits compared to other solutions. In testing, three in particular have been observed.
+
+NEED TO COMPARE ALL THESE AGAINST PICOVOICE!
+
+1) The trained models seem to respond reasonably well to wakewords and phrases that are [whispered](https://en.wikipedia.org/wiki/Whispering). This is surprising behavior, as the text-to-speech models used for producing training data generally do not create synthetic speech that has acoustic qualities similar to whispering.
+
+2) The models also respond relatively well to wakewords and phrases that are spoken quickly or slowly.
+
+3) The models are able to handle some variability in the phrasing of a given command. This behavior was not entirely a suspries, given that SOURCE had reported similar benefits when training end-to-end SLU systems. For example, the pre-trained timer models will typically still respond correctly to a phrase like "make an oven timer for 5 minutes" despite never encountering that phrase during training (though false rejections rates will likely be higher, on average, compared to phrases closer to the training data).
+
+For comparison purposes, when testing the Picovoice Porcupine models for "alexa" and "hey mycroft" with whispered and fast/slow speaking speed, performance degraded such that the detection was no longer usable (NEED TO VERIFY THIS!).
 
 # Training New Models
 

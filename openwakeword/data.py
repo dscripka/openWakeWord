@@ -15,6 +15,7 @@
 # imports
 from multiprocessing.pool import ThreadPool
 import os
+from functools import partial
 from pathlib import Path
 import random
 from tqdm import tqdm
@@ -103,27 +104,31 @@ def load_audio_clips(files, clip_size=32000):
     return X
 
 
-# Dato I/O utils
+## Dato I/O utils
 
 
 # Convert clips with sox
-def _convert_clip(input_file, output_file):
-    cmd = f"sox {input_file} -G -r 16000 -c 1 {output_file}"
+def _convert_clip(input_file, output_file, backend="ffmpeg"):
+    if backend == "sox":
+        cmd = f"sox \"{input_file}\" -G -r 16000 -c 1 \"{output_file}\""
+    elif backend == "ffmpeg":
+        cmd = f"ffmpeg -y -i \"{input_file}\" -ar 16000 \"{output_file}\""
     os.system(cmd)
     return None
 
 
-def convert_clips(input_files, output_files, sr=16000, ncpu=1):
+def convert_clips(input_files, output_files, sr=16000, ncpu=1, backend="ffmpeg"):
     """
-    Converts files in parallel with multithreading using Sox.
+    Converts files in parallel with multithreading using Sox or ffmpeg.
 
-    Intended to only convert input audio files in single-channel, 16 khz clips.
+    Intended to only convert input audio files into single-channel, 16 khz clips.
 
     Args:
         input_files (List[str]): A list of paths to input files
-        output_files (List[str]): A list of paths ot output files, correspondind 1:1 to the input files
+        output_files (List[str]): A list of paths to output files, corresponding 1:1 to the input files
         sr (int): The output sample rate of the converted clip
         ncpu (int): The number of CPUs to use for the conversion
+        backend (str): The utilty to use for conversion, "sox" or "ffmpeg"
 
     Returns:
         None
@@ -131,8 +136,11 @@ def convert_clips(input_files, output_files, sr=16000, ncpu=1):
     # Setup ThreadPool object
     pool = ThreadPool(processes=ncpu)
 
+    # Set backend for conversion
+    f = partial(_convert_clip, backend=backend)
+
     # Submit jobs
-    pool.starmap(_convert_clip, [(i, j) for i, j in zip(input_files, output_files)])
+    pool.starmap(f, [(i, j) for i, j in zip(input_files, output_files)])
 
 
 def filter_audio_paths(target_dirs, min_length_secs, max_length_secs, duration_method="size", glob_filter=None):
@@ -286,15 +294,18 @@ def mix_clips_batch(
         random.seed(seed)
 
     if shuffle:
-        random.shuffle(foreground_clips)
+        pairs = list(zip(foreground_clips, start_index))
+        random.shuffle(pairs)
+        foreground_clips, start_index = zip(*pairs)
 
     # Set start indices, if needed
     if not start_index:
         start_index = [0]*batch_size
 
     for i in range(0, len(foreground_clips), batch_size):
-        # Load foreground clips and truncate (if needed)
+        # Load foreground clips/start indices and truncate (if needed)
         foreground_clips_batch = [read_audio(i)[0:combined_size] for i in foreground_clips[i:i+batch_size]]
+        start_index_batch = start_index[i:i+batch_size]
 
         # Load background clips and pad/truncate as needed
         background_clips_batch = [read_audio(i) for i in random.sample(background_clips, batch_size)]
@@ -311,11 +322,11 @@ def mix_clips_batch(
         snrs_db = np.random.uniform(snr_low, snr_high, batch_size)
         mixed_clips = []
         for fg, bg, snr, start in zip(foreground_clips_batch, background_clips_batch,
-                                      snrs_db, start_index):
+                                      snrs_db, start_index_batch):
             fg_rms, bg_rms = fg.norm(p=2), bg.norm(p=2)
             snr = 10 ** (snr / 20)
             scale = snr * bg_rms / fg_rms
-            bg[start:start + fg.shape[0]] = bg[start:start + fg.shape[0]] + scale*fg[0:bg.shape[0] - start]
+            bg[start:start + fg.shape[0]] = bg[start:start + fg.shape[0]] + scale*fg
             mixed_clips.append(bg / 2)
 
         mixed_clips_batch = torch.vstack(mixed_clips)
