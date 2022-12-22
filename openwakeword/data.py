@@ -254,6 +254,7 @@ def mix_clips_batch(
         foreground_clips: List[str],
         background_clips: List[str],
         combined_size: int,
+        labels: List[int] = [],
         batch_size: int = 32,
         snr_low: float = 0,
         snr_high: float = 0,
@@ -274,6 +275,8 @@ def mix_clips_batch(
                                       foreground clip)
         combined_size (int): The total length (in samples) of the combined clip. If needed, the background
                              clips are duplicated or truncated to reach this length.
+        labels (List[int]): A list of integer labels corresponding 1:1 for the foreground clips. Will be updated
+                            as needed with foreground clips to ensure that mixed clips retain the proper labels.
         batch_size (int): The batch size
         snr_low (float): The low SNR level of the mixing in db
         snr_high (float): The high snr level of the mixing in db
@@ -293,26 +296,31 @@ def mix_clips_batch(
         np.random.seed(seed)
         random.seed(seed)
 
-    if shuffle:
-        pairs = list(zip(foreground_clips, start_index))
-        random.shuffle(pairs)
-        foreground_clips, start_index = zip(*pairs)
-
     # Set start indices, if needed
     if not start_index:
         start_index = [0]*batch_size
+
+    # Make dummy labels
+    if not labels:
+        labels = [0]*len(foreground_clips)
+
+    if shuffle:
+        pairs = list(zip(foreground_clips, start_index, labels))
+        random.shuffle(pairs)
+        foreground_clips, start_index, labels = zip(*pairs)
 
     for i in range(0, len(foreground_clips), batch_size):
         # Load foreground clips/start indices and truncate (if needed)
         foreground_clips_batch = [read_audio(i)[0:combined_size] for i in foreground_clips[i:i+batch_size]]
         start_index_batch = start_index[i:i+batch_size]
+        labels_batch = np.array(labels[i:i+batch_size])
 
         # Load background clips and pad/truncate as needed
         background_clips_batch = [read_audio(i) for i in random.sample(background_clips, batch_size)]
         for ndx, background_clip in enumerate(background_clips_batch):
             if background_clip.shape[0] < combined_size:
                 background_clips_batch[ndx] = background_clip.repeat(
-                    np.ceil(combined_size/background_clip.shape[0])
+                    np.ceil(combined_size/background_clip.shape[0]).astype(np.int32)
                 )[0:combined_size]
             elif background_clip.shape[0] > combined_size:
                 r = np.random.randint(0, max(1, background_clip.shape[0] - combined_size))
@@ -348,9 +356,11 @@ def mix_clips_batch(
         mixed_clips_batch = (mixed_clips_batch.numpy()*32767).astype(np.int16)
 
         # Remove any clips that are silent (happens rarely when mixing/reverberating)
-        mixed_clips_batch = mixed_clips_batch[np.where(mixed_clips_batch.max(axis=1) != 0)[0]]
+        error_index = np.where(mixed_clips_batch.max(axis=1) != 0)[0]
+        mixed_clips_batch = mixed_clips_batch[error_index]
+        labels_batch = labels_batch[error_index]
 
-        yield mixed_clips_batch
+        yield mixed_clips_batch, labels_batch
 
 
 # Reverberation data augmentation function
