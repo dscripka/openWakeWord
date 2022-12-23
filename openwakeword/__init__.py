@@ -5,16 +5,16 @@ __all__ = ['Model', ]
 
 models = {
     "alexa": {
-        "model_path": os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources/models/alexa_v7.onnx")
+        "model_path": os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources/models/alexa_v0.1.onnx")
     },
     "hey_mycroft": {
-        "model_path": os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources/models/hey_mycroft_v1.onnx")
+        "model_path": os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources/models/hey_mycroft_v0.1.onnx")
     },
     "timer": {
-        "model_path": os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources/models/timer_v2.onnx")
+        "model_path": os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources/models/timer_v0.1.onnx")
     },
     "weather": {
-        "model_path": os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources/models/weather_v1.onnx")
+        "model_path": os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources/models/weather_v0.1.onnx")
     }
 }
 

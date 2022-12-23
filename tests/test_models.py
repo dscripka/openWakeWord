@@ -40,8 +40,8 @@ class TestModels:
     def test_models(self):
         # Load model with path and custom class mapping
         owwModel = openwakeword.Model(
-            wakeword_model_paths=[os.path.join("openwakeword", "resources", "models", "alexa_v7.onnx")],
-            class_mapping_dicts=[{"alexa_v7": {"0": "negative"}}]
+            wakeword_model_paths=[os.path.join("openwakeword", "resources", "models", "alexa_v0.1.onnx")],
+            class_mapping_dicts=[{"alexa_v0.1": {"0": "negative"}}]
         )
 
         # Load model with defaults
