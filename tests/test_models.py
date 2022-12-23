@@ -32,12 +32,19 @@ import os
 import numpy as np
 from pathlib import Path
 import collections
+import pytest
 
 
 # Tests
 class TestModels:
     def test_models(self):
-        # Load model
+        # Load model with path and custom class mapping
+        owwModel = openwakeword.Model(
+            wakeword_model_paths = [os.path.join("openwakeword", "resources", "models", "alexa_v7.onnx")],
+            class_mapping_dicts = [{"alexa_v7": {"0": "negative"}}]
+            )
+
+        # Load model with defaults
         owwModel = openwakeword.Model()
 
         # Get clips for each model (assumes that test clips will have the model name in the filename)
@@ -74,3 +81,24 @@ class TestModels:
         )
 
         owwModel.predict(np.zeros(1280), timing=True)
+
+    def test_prediction_with_patience(self):
+        owwModel = openwakeword.Model()
+        target_model_name = list(owwModel.models.keys())[0]
+
+        with pytest.raises(ValueError):
+            owwModel.predict(
+                np.zeros(1280),
+                patience = {target_model_name: 5}
+                )
+
+        owwModel.predict(
+            np.zeros(1280),
+            patience = {target_model_name: 5},
+            threshold = {target_model_name: 0.5}
+            )
+
+    def test_get_parent_model_from_prediction_label(self):
+        owwModel = openwakeword.Model()
+        target_model_name = list(owwModel.models.keys())[0]
+        owwModel.get_parent_model_from_label(target_model_name)

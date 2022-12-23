@@ -44,7 +44,7 @@ def generate_roc_curve_fprs(
 
     # Calculate true positive rate
     fprs = []
-    for threshold in tqdm(np.linspace(0.05, 0.95, num=n_points)):
+    for threshold in tqdm(np.linspace(0.01, 0.99, num=n_points)):
         # Remove repeated predictions from data to not overcount false positives
         bin_pred = ''.join(["1" if i else "0" for i in np.array(scores) >= threshold])
         bin_pred = re.sub("1(0){1,5}1", "1", bin_pred)
@@ -70,7 +70,7 @@ def generate_roc_curve_tprs(
     """
 
     tprs = []
-    for threshold in tqdm(np.linspace(0.05, 0.95, num=n_points)):
+    for threshold in tqdm(np.linspace(0.01, 0.99, num=n_points)):
         tprs.append(sum(scores >= threshold)/len(scores))
 
     return tprs

@@ -24,7 +24,6 @@ import json
 from collections import deque, defaultdict
 from functools import partial
 import time
-import pprint
 from typing import List, Union, DefaultDict, Dict
 
 
@@ -34,13 +33,20 @@ class Model():
     The main model class for openWakeWord. Creates a model object with the shared audio pre-processer
     and for arbitrarily many custom wake word/wake phrase models.
     """
-    def __init__(self, wakeword_model_paths: List[str] = [], **kwargs):
+    def __init__(
+            self,
+            wakeword_model_paths: List[str] = [],
+            class_mapping_dicts: List[dict] = [],
+            **kwargs
+        ):
         """
         Initialize the openWakeWord model object.
 
         Args:
             wakeword_model_paths (List[str]): A list of paths of ONNX models to load into the openWakeWord model object.
                                               If not provided, will load all of the pre-trained models.
+            class_mapping_dicts (List[dict]): A list of dictionaries with integer to string class mappings for each model
+                                              in the `wakeword_model_paths` arguments (e.g., {"0": "class_1", "1": "class_2"})
         """
 
         # Initialize the ONNX models and store them
@@ -67,10 +73,12 @@ class Model():
             self.model_inputs[mdl_name] = self.models[mdl_name].get_inputs()[0].shape[1]
             self.model_outputs[mdl_name] = self.models[mdl_name].get_outputs()[0].shape[1]
             output_name = self.models[mdl_name].get_outputs()[0].name
-            if "{" in output_name:
-                self.class_mapping[mdl_name] = json.loads(output_name)
+            if class_mapping_dicts and class_mapping_dicts[wakeword_model_paths.index(mdl_path)].get(mdl_name, None):
+                self.class_mapping[mdl_name] = class_mapping_dicts[wakeword_model_paths.index(mdl_path)]
+            elif openwakeword.model_class_mappings.get(mdl_name, None):
+                self.class_mapping[mdl_name] = openwakeword.model_class_mappings[mdl_name]
             else:
-                self.class_mapping[mdl_name] = mdl_name
+                self.class_mapping[mdl_name] = {str(i):str(i) for i in range(0, self.model_outputs[mdl_name])}
             self.model_input_names[mdl_name] = self.models[mdl_name].get_inputs()[0].name
 
         # Create buffer to store frame predictios
@@ -83,12 +91,10 @@ class Model():
         """Gets the parent model associated with a given prediction label"""
         parent_model = ""
         for mdl in self.class_mapping.keys():
-            if isinstance(self.class_mapping[mdl], dict):
-                if label in self.class_mapping[mdl].values():
-                    parent_model = mdl
-            else:
-                if label == self.class_mapping[mdl]:
-                    parent_model = self.class_mapping[mdl]
+            if label in self.class_mapping[mdl].values():
+                parent_model = mdl
+            elif label in self.class_mapping.keys() and label == mdl:
+                parent_model = mdl
 
         return parent_model
 
@@ -111,12 +117,13 @@ class Model():
             threshold (dict): The threshold values to use when the `patience` behavior is enabled.
                               Must be provided as an a dictionary where the keys are the
                               model names and the values are the thresholds.
-            timing (bool): Whether to print timing information of the models. Can be useful to debug and
-                           assess how efficiently models are running the current hardware.
+            timing (bool): Whether to return timing information of the models. Can be useful to debug and
+                           assess how efficiently models are running on the current hardware.
 
         Returns:
             dict: A dictionary of scores between 0 and 1 for each model, where 0 indicates no
-                  wake-word/wake-phrase detected
+                  wake-word/wake-phrase detected. If the `timing` argument is true, returns a
+                  tuple of dicts containing model predictions and timing information, respectively.
         """
         # Get audio features
         if timing:
@@ -173,8 +180,7 @@ class Model():
                         predictions[mdl] = 0.0
 
         if timing:
-            pprint.PrettyPrinter().pprint(timing_dict)
-            return predictions
+            return predictions, timing_dict
         else:
             return predictions
 

@@ -67,7 +67,7 @@ class AudioFeatures():
         self.raw_data_buffer: Deque = deque(maxlen=sr*10)
         self.melspectrogram_buffer = np.ones((76, 32))  # n_frames x num_features
         self.melspectrogram_max_len = 10*97  # 97 is the number of frames in 1 second of 16hz audio
-        self.feature_buffer = self._get_embeddings(np.zeros(64000).astype(np.int16))  # fill with blank data to start
+        self.feature_buffer = self._get_embeddings(np.zeros(160000).astype(np.int16))  # fill with blank data to start
         self.feature_buffer_max_len = 120  # ~10 seconds of feature buffer history
 
     def _get_melspectrogram(self, x: Union[np.ndarray, List], melspec_transform: Callable = lambda x: x/10 + 2):

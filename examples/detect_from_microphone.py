@@ -13,33 +13,28 @@
 # limitations under the License.
 
 # Imports
-import os
 import plotext as plt
-import sounddevice
+import pyaudio
 import numpy as np
 from openwakeword.model import Model
 
 # Get microphone stream
-mic_stream = sounddevice.InputStream(
-    samplerate=16000,
-    blocksize=1280,
-    device = 3,
-    dtype = np.int16,
-)
+FORMAT = pyaudio.paInt16
+CHANNELS = 1
+RATE = 16000
+CHUNK = 1280
+audio = pyaudio.PyAudio()
+mic_stream = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
 
 # Load pre-trained openwakeword models
 owwModel = Model()
 
 # Run capture loop, checking for hotwords
 if __name__ == "__main__":
-    # Start the mic stream
-    mic_stream.start()
-
-    # Create a prediction buffer
+    # Predict continuously on audio stream
     while True:
         # Get audio
-        audio, overflowed = mic_stream.read(1280)
-        audio = audio.squeeze()
+        audio = np.frombuffer(mic_stream.read(CHUNK), dtype=np.int16)
 
         # Feed to openWakeWord model
         prediction = owwModel.predict(audio)
