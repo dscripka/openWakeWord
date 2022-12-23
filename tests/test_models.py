@@ -40,9 +40,9 @@ class TestModels:
     def test_models(self):
         # Load model with path and custom class mapping
         owwModel = openwakeword.Model(
-            wakeword_model_paths = [os.path.join("openwakeword", "resources", "models", "alexa_v7.onnx")],
-            class_mapping_dicts = [{"alexa_v7": {"0": "negative"}}]
-            )
+            wakeword_model_paths=[os.path.join("openwakeword", "resources", "models", "alexa_v7.onnx")],
+            class_mapping_dicts=[{"alexa_v7": {"0": "negative"}}]
+        )
 
         # Load model with defaults
         owwModel = openwakeword.Model()
@@ -89,13 +89,13 @@ class TestModels:
         with pytest.raises(ValueError):
             owwModel.predict(
                 np.zeros(1280),
-                patience = {target_model_name: 5}
+                patience={target_model_name: 5}
                 )
 
         owwModel.predict(
             np.zeros(1280),
-            patience = {target_model_name: 5},
-            threshold = {target_model_name: 0.5}
+            patience={target_model_name: 5},
+            threshold={target_model_name: 0.5}
             )
 
     def test_get_parent_model_from_prediction_label(self):

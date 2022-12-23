@@ -20,7 +20,6 @@ from openwakeword.utils import AudioFeatures
 
 import wave
 import os
-import json
 from collections import deque, defaultdict
 from functools import partial
 import time
@@ -38,15 +37,15 @@ class Model():
             wakeword_model_paths: List[str] = [],
             class_mapping_dicts: List[dict] = [],
             **kwargs
-        ):
-        """
-        Initialize the openWakeWord model object.
+            ):
+        """Initialize the openWakeWord model object.
 
         Args:
             wakeword_model_paths (List[str]): A list of paths of ONNX models to load into the openWakeWord model object.
                                               If not provided, will load all of the pre-trained models.
-            class_mapping_dicts (List[dict]): A list of dictionaries with integer to string class mappings for each model
-                                              in the `wakeword_model_paths` arguments (e.g., {"0": "class_1", "1": "class_2"})
+            class_mapping_dicts (List[dict]): A list of dictionaries with integer to string class mappings for
+                                              each model in the `wakeword_model_paths` arguments
+                                              (e.g., {"0": "class_1", "1": "class_2"})
         """
 
         # Initialize the ONNX models and store them
@@ -72,16 +71,15 @@ class Model():
                                                          providers=["CPUExecutionProvider"])
             self.model_inputs[mdl_name] = self.models[mdl_name].get_inputs()[0].shape[1]
             self.model_outputs[mdl_name] = self.models[mdl_name].get_outputs()[0].shape[1]
-            output_name = self.models[mdl_name].get_outputs()[0].name
             if class_mapping_dicts and class_mapping_dicts[wakeword_model_paths.index(mdl_path)].get(mdl_name, None):
                 self.class_mapping[mdl_name] = class_mapping_dicts[wakeword_model_paths.index(mdl_path)]
             elif openwakeword.model_class_mappings.get(mdl_name, None):
                 self.class_mapping[mdl_name] = openwakeword.model_class_mappings[mdl_name]
             else:
-                self.class_mapping[mdl_name] = {str(i):str(i) for i in range(0, self.model_outputs[mdl_name])}
+                self.class_mapping[mdl_name] = {str(i): str(i) for i in range(0, self.model_outputs[mdl_name])}
             self.model_input_names[mdl_name] = self.models[mdl_name].get_inputs()[0].name
 
-        # Create buffer to store frame predictios
+        # Create buffer to store frame predictions
         self.prediction_buffer: DefaultDict[str, deque] = defaultdict(partial(deque, maxlen=30))
 
         # Create AudioFeatures object
@@ -157,10 +155,10 @@ class Model():
                     predictions[cls] = prediction[0][0][int(int_label)]
 
             # Update prediction buffer, and zero predictions for first 5 frames during model initialization
-            for mdl in predictions.keys():
-                if len(self.prediction_buffer[mdl]) < 5:
-                    predictions[mdl] = 0.0
-                self.prediction_buffer[mdl].append(predictions[mdl])
+            for cls in predictions.keys():
+                if len(self.prediction_buffer[cls]) < 5:
+                    predictions[cls] = 0.0
+                self.prediction_buffer[cls].append(predictions[cls])
 
             # Get timing information
             if timing:

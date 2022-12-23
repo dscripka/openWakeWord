@@ -25,9 +25,10 @@ model_class_mappings = {
         "3": "10_minute_timer",
         "4": "20_minute_timer",
         "5": "30_minute_timer",
-        "6": "1_hour_timer" 
+        "6": "1_hour_timer"
     }
 }
+
 
 def get_pretrained_model_paths():
     return [models[i]["model_path"] for i in models.keys()]

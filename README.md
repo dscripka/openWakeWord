@@ -18,7 +18,7 @@ If you want to do a full-install to support all examples and model training (not
 pip install openwakeword[full]
 ```
 
-For testing, use the included [example script](examples/detect_from_microphone.py) to try streaming detection from a local microphone.
+For quick local testing, use the included [example script](examples/detect_from_microphone.py) to try streaming detection from a local microphone.
 
 Or, try the default included models right in your browser at the [HuggingFace Spaces demo]()!
 
@@ -32,10 +32,10 @@ model = Model(
     wakeword_model_paths=["path/to/model.onnx"],  # can also leave this argument empty to load all of the included pre-trained models
 )
 
-# Get an 80 ms audio frame from a file, microphone, network stream, etc. containing 16-bit 16khz PCM audio data
+# Get an 80 ms audio frame containing 16-bit 16khz PCM audio data from a file, microphone, network stream, etc. 
 frame = my_function_to_get_audio_frame()
 
-# Get predictions for the frame, representing scores between 0 and 1
+# Get predictions for the frame
 prediction = model.predict(frame)
 ```
 

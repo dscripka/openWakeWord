@@ -104,7 +104,7 @@ def load_audio_clips(files, clip_size=32000):
     return X
 
 
-## Dato I/O utils
+# Dato I/O utils
 
 
 # Convert clips with sox
@@ -305,9 +305,10 @@ def mix_clips_batch(
         labels = [0]*len(foreground_clips)
 
     if shuffle:
-        pairs = list(zip(foreground_clips, start_index, labels))
-        random.shuffle(pairs)
-        foreground_clips, start_index, labels = zip(*pairs)
+        p = np.random.permutation(len(foreground_clips))
+        foreground_clips = np.array(foreground_clips)[p].tolist()
+        start_index = np.array(start_index)[p].tolist()
+        labels = np.array(labels)[p].tolist()
 
     for i in range(0, len(foreground_clips), batch_size):
         # Load foreground clips/start indices and truncate (if needed)
