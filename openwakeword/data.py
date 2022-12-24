@@ -261,7 +261,7 @@ def mix_clips_batch(
         start_index: List[int] = [],
         rirs: List[str] = [],
         shuffle: bool = True,
-        seed: int = None
+        seed: int = 0
         ):
     """
     Mixes foreground and background clips at a random SNR level in batches.
@@ -403,7 +403,7 @@ class mmap_batch_generator:
     def __init__(self,
                  data_files: dict,
                  batch_size: int,
-                 n_per_class: dict = None,
+                 n_per_class: dict = {},
                  data_transform_funcs: dict = {},
                  label_transform_funcs: dict = {}
                  ):

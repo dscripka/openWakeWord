@@ -78,7 +78,7 @@ class AudioFeatures():
             x (Union[np.ndarray, List]): The input audio data to compute the melspectrogram from
             melspec_transform (Callable): A function to transform the computed melspectrogram. Defaults to a transform
                                           that makes the ONNX melspectrogram model closer to the native Tensorflow
-                                          implementation from Google.
+                                          implementation from Google (https://tfhub.dev/google/speech_embedding/1).
 
         Return:
             np.ndarray: The computed melspectrogram of the input audio data
@@ -95,8 +95,8 @@ class AudioFeatures():
         outputs = self.melspec_model.run(None, {'input': x})
         spec = np.squeeze(outputs[0])
 
-        if melspec_transform:
-            spec = melspec_transform(spec)  # Arbitrary transform to get result closer to original tensorflow melspec
+        # Arbitrary transform of melspectrogram
+        spec = melspec_transform(spec)
 
         return spec
 
