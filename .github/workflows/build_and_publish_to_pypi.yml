@@ -1,10 +1,10 @@
-name: Publish Python 🐍 distributions 📦 to PyPI
+name: Publish Python distributions to PyPI
 
 on: push
 
 jobs:
   build-n-publish:
-    name: Build and publish Python 🐍 distributions 📦 to PyPI
+    name: Build and publish Python distributions to PyPI
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@master
@@ -22,7 +22,7 @@ jobs:
       run: >-
         python -m
         build
-    - name: Publish distribution 📦 to PyPI
+    - name: Publish distribution to PyPI
       if: startsWith(github.ref, 'refs/tags')
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
