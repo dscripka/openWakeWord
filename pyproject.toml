@@ -9,3 +9,21 @@ testpaths = [
     "tests",
     "openwakeword"
 ]
+
+[project]
+name = "openwakeword"
+version = "0.1.0"
+authors = [
+  { name="David Scripka", email="david.scripka@gmail.com" },
+]
+description = "An open-source audio wake word (or phrase) detection framework with a focus on performance and simplicity"
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache 2.0 License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/dscripka/openWakeWord"

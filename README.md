@@ -2,7 +2,7 @@
 
 # openWakeWord
 
-openWakeWord is a fully open-source wakeword library that can be used to create voice-enabled applications and interfaces. It has a set of pre-trained models for common words & phrases that work well in real-world environments, and does not require user-specific data or training to achieve robust performance.
+openWakeWord is an open-source wakeword library that can be used to create voice-enabled applications and interfaces. It includes pre-trained models for common words & phrases that work well in real-world environments.
 
 # Installation & Usage
 
@@ -12,15 +12,7 @@ Installing openWakeWord is simple and has minimal dependencies:
 pip install openwakeword
 ```
 
-If you want to do a full-install to support all examples and model training (note! will install PyTorch):
-
-```
-pip install openwakeword[full]
-```
-
 For quick local testing, use the included [example script](examples/detect_from_microphone.py) to try streaming detection from a local microphone.
-
-Or, try the default included models right in your browser at the [HuggingFace Spaces demo]()!
 
 Adding openWakeWord to your own Python code requires just a few lines:
 
