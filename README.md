@@ -4,6 +4,12 @@
 
 openWakeWord is an open-source wakeword library that can be used to create voice-enabled applications and interfaces. It includes pre-trained models for common words & phrases that work well in real-world environments.
 
+# Demo
+
+You can try an online demo of the included pre-trained models via HuggingFace Spaces [right here!](https://huggingface.co/spaces/davidscripka/openWakeWord).
+
+Note that real-time detection of a microphone stream can occassionally behave strangely in Spaces. For the most reliable testing, perform a local installation as described below.
+
 # Installation & Usage
 
 Installing openWakeWord is simple and has minimal dependencies:
