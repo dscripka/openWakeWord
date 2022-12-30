@@ -33,9 +33,9 @@ setuptools.setup(
     description="An open-source audio wake word (or phrase) detection framework with a focus on performance and simplicity",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/pypa/sampleproject",
+    url="https://pypi.org/project/openwakeword",
     project_urls={
-        "Bug Tracker": "https://github.com/pypa/sampleproject/issues",
+        "Bug Tracker": "https://pypi.org/project/openwakeword/issues",
     },
     classifiers=[
         "Programming Language :: Python :: 3",
