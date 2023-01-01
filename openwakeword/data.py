@@ -260,6 +260,8 @@ def mix_clips_batch(
         snr_high: float = 0,
         start_index: List[int] = [],
         rirs: List[str] = [],
+        rir_probability: int = 1,
+        volume_augmentation: bool = True,
         shuffle: bool = True,
         seed: int = 0
         ):
@@ -283,8 +285,13 @@ def mix_clips_batch(
         start_index (List[int]): The starting position (in samples) for the foreground clip to start in
                                  the background clip.
         rirs (List[str]): A list of paths to room impulse response functions (RIR) to convolve with the
-                          clips to simulate different recording environments. Applies a single random from the
+                          clips to simulate different recording environments. Applies a single random selection from the
                           list RIR file to the entire batch. If empty (the default), nothing is done.
+        rir_probability (float): The probability (between 0 and 1) that the batch will be convolved with a RIR file.
+        volume_augmentation (bool): Whether to randomly apply volume augmentation to the clips in the batch.
+                                    This simply scales the data of each clip such that the maximum value is is between
+                                    0.02 and 1.0 (the floor shouldn't be zero as beyond a certain point the audio data
+                                    is no longer valid).
         shuffle (bool): Whether to shuffle the foreground clips before mixing (default: True)
         seed (int): A random seed
 
@@ -342,16 +349,22 @@ def mix_clips_batch(
 
         # Apply reverberation to the batch (from a single RIR file)
         if rirs:
-            rir_waveform, sr = torchaudio.load(random.choice(rirs))
-            if rir_waveform.shape[0] > 1:
-                rir_waveform = rir_waveform[random.randint(0, rir_waveform.shape[0]-1), :]
-            mixed_clips_batch = reverberate(mixed_clips_batch, rir_waveform, rescale_amp="avg")
+            if np.random.random() <= rir_probability:
+                rir_waveform, sr = torchaudio.load(random.choice(rirs))
+                if rir_waveform.shape[0] > 1:
+                    rir_waveform = rir_waveform[random.randint(0, rir_waveform.shape[0]-1), :]
+                mixed_clips_batch = reverberate(mixed_clips_batch, rir_waveform, rescale_amp="avg")
 
-        # Normalize clips only if max value is outside of [-1, 1]
-        abs_max, _ = torch.max(
-            torch.abs(mixed_clips_batch), dim=1, keepdim=True
-        )
-        mixed_clips_batch = mixed_clips_batch / abs_max.clamp(min=1.0)
+        # Apply volume augmentation
+        if volume_augmentation:
+            volume_levels = np.random.uniform(0.02, 1.0, mixed_clips_batch.shape[0])
+            mixed_clips_batch = (volume_levels/mixed_clips_batch.max(axis=1)[0])[..., None]*mixed_clips_batch
+        else:
+            # Normalize clips only if max value is outside of [-1, 1]
+            abs_max, _ = torch.max(
+                torch.abs(mixed_clips_batch), dim=1, keepdim=True
+            )
+            mixed_clips_batch = mixed_clips_batch / abs_max.clamp(min=1.0)
 
         # Convert to 16-bit PCM audio
         mixed_clips_batch = (mixed_clips_batch.numpy()*32767).astype(np.int16)

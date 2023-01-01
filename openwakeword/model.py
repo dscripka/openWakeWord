@@ -182,12 +182,13 @@ class Model():
         else:
             return predictions
 
-    def predict_clip(self, clip: str, padding: int = 1, **kwargs):
+    def predict_clip(self, clip: Union[str, np.ndarray], padding: int = 1, **kwargs):
         """Predict on an full audio clip, simulating streaming prediction.
         The input clip must bit a 16-bit, 16 khz, single-channel WAV file.
 
         Args:
-            clip (str): The path to a 16-bit PCM, 16 khz, single-channel WAV file
+            clip (Union[str, np.ndarray]): The path to a 16-bit PCM, 16 khz, single-channel WAV file,
+                                           or an 1D array containing the same type of data
             padding (int): How many seconds of silence to pad the start/end of the clip with
                             to make sure that short clips can be processed correctly (default: 1)
             kwargs: Any keyword arguments to pass to the class `predict` method
@@ -195,18 +196,22 @@ class Model():
         Returns:
             list: A list containing the frame-level prediction dictionaries for the audio clip
         """
-        # Load audio clip as 16-bit PCM data
-        with wave.open(clip, mode='rb') as f:
-            # Load WAV clip frames
-            data = np.frombuffer(f.readframes(f.getnframes()), dtype=np.int16)
-            if padding:
-                data = np.concatenate(
-                    (
-                        np.zeros(16000*padding).astype(np.int16),
-                        data,
-                        np.zeros(16000*padding).astype(np.int16)
-                    )
+        if isinstance(clip, str):
+            # Load audio clip as 16-bit PCM data
+            with wave.open(clip, mode='rb') as f:
+                # Load WAV clip frames
+                data = np.frombuffer(f.readframes(f.getnframes()), dtype=np.int16)
+        elif isinstance(clip, np.ndarray):
+            data = clip
+
+        if padding:
+            data = np.concatenate(
+                (
+                    np.zeros(16000*padding).astype(np.int16),
+                    data,
+                    np.zeros(16000*padding).astype(np.int16)
                 )
+            )
 
         # Iterate through clip, getting predictions
         predictions = []

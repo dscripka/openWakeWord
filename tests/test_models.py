@@ -71,6 +71,15 @@ class TestModels:
                 else:
                     assert max(predictions_flat[key]) < 0.5
 
+    def test_predict_clip_with_array(self):
+        # Load model with defaults
+        owwModel = openwakeword.Model()
+
+        # Make random array and predict
+        dat = np.random.random(16000)
+        predictions = owwModel.predict_clip(dat)
+        assert isinstance(predictions[0], dict)
+
     def test_models_with_timing(self):
         models = [str(i) for i in Path(
                     os.path.join("openwakeword", "resources", "models")
