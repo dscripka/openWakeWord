@@ -21,7 +21,7 @@ from typing import List
 
 # Define metric utility functions specific to the wakeword detection use-case
 
-def get_false_positives(scores: List, threshold: float, grouping_window: int=50):
+def get_false_positives(scores: List, threshold: float, grouping_window: int = 50):
     """
     Counts the number of false-positives based on a list of scores and a specified threshold.
 
@@ -41,7 +41,7 @@ def get_false_positives(scores: List, threshold: float, grouping_window: int=50)
     for t in transitions:
         if bin_pred[t.end()] != 0:
             bin_pred[t.end():t.end() + n] = [0]*n
-        
+
     return sum(bin_pred)
 
 
