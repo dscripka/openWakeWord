@@ -58,7 +58,7 @@ class Model():
             wakeword_model_paths = openwakeword.get_pretrained_model_paths()
             wakeword_model_names = list(openwakeword.models.keys())
         else:
-            wakeword_model_names = [os.path.basename(i.strip(".onnx")) for i in wakeword_model_paths]
+            wakeword_model_names = [os.path.basename(i[0:-5]) for i in wakeword_model_paths]
 
         # Create attributes to store models and metadat
         self.models = {}

@@ -19,7 +19,7 @@ from functools import partial
 from pathlib import Path
 import random
 from tqdm import tqdm
-from typing import List
+from typing import List, Tuple
 import numpy as np
 import torch
 from numpy.lib.format import open_memmap
@@ -263,6 +263,8 @@ def mix_clips_batch(
         rir_probability: int = 1,
         volume_augmentation: bool = True,
         shuffle: bool = True,
+        return_background_clips: bool = False,
+        return_background_clips_delay: Tuple[int, int] = (0, 0),
         seed: int = 0
         ):
     """
@@ -292,20 +294,33 @@ def mix_clips_batch(
                                     This simply scales the data of each clip such that the maximum value is is between
                                     0.02 and 1.0 (the floor shouldn't be zero as beyond a certain point the audio data
                                     is no longer valid).
+        return_background_clips (bool): Whether to return the segment of the background clip that was mixed with each
+                                        foreground clip in the batch.
+        return_background_clips_delay (Tuple(int)): The lower and upper bound of a random delay (in samples)
+                                           to apply to the segment of each returned backgroud clip mixed
+                                           with each foreground clip in the batch. This is primarily intended to
+                                           simulate the drift between input and output channels
+                                           in audio devices, which means that the mixed audio is never
+                                           exactly aligned with the two source clips.
         shuffle (bool): Whether to shuffle the foreground clips before mixing (default: True)
         seed (int): A random seed
 
     Returns:
-        generator: Returns a generator that yields batches of mixed foreground/background audio
+        generator: Returns a generator that yields batches of mixed foreground/background audio, labels, and the
+                   background segments used for each audio clip (or None is the
+                   `return_backgroun_clips` argument is False)
     """
     # Set random seed, if needed
     if seed:
         np.random.seed(seed)
         random.seed(seed)
 
-    # Set start indices, if needed
+    # Check and Set start indices, if needed
     if not start_index:
         start_index = [0]*batch_size
+    else:
+        if min(start_index) < 0:
+            raise ValueError("Error! At least one value of the `start_index` argument is <0. Check your inputs.")
 
     # Make dummy labels
     if not labels:
@@ -325,14 +340,20 @@ def mix_clips_batch(
 
         # Load background clips and pad/truncate as needed
         background_clips_batch = [read_audio(i) for i in random.sample(background_clips, batch_size)]
+        background_clips_batch = [i[0] if len(i.shape) > 1 else i for i in background_clips_batch]
+        background_clips_batch_delayed = []
+        delay = np.random.randint(return_background_clips_delay[0], return_background_clips_delay[1] + 1)
         for ndx, background_clip in enumerate(background_clips_batch):
-            if background_clip.shape[0] < combined_size:
-                background_clips_batch[ndx] = background_clip.repeat(
-                    np.ceil(combined_size/background_clip.shape[0]).astype(np.int32)
-                )[0:combined_size]
-            elif background_clip.shape[0] > combined_size:
-                r = np.random.randint(0, max(1, background_clip.shape[0] - combined_size))
+            if background_clip.shape[0] < (combined_size + delay):
+                repeated = background_clip.repeat(
+                    np.ceil((combined_size + delay)/background_clip.shape[0]).astype(np.int32)
+                )
+                background_clips_batch[ndx] = repeated[0:combined_size]
+                background_clips_batch_delayed.append(repeated[0+delay:combined_size + delay].clone())
+            elif background_clip.shape[0] > (combined_size + delay):
+                r = np.random.randint(0, max(1, background_clip.shape[0] - combined_size - delay))
                 background_clips_batch[ndx] = background_clip[r:r + combined_size]
+                background_clips_batch_delayed.append(background_clip[r+delay:r + combined_size + delay].clone())
 
         # Mix clips at snr levels
         snrs_db = np.random.uniform(snr_low, snr_high, batch_size)
@@ -342,6 +363,8 @@ def mix_clips_batch(
             fg_rms, bg_rms = fg.norm(p=2), bg.norm(p=2)
             snr = 10 ** (snr / 20)
             scale = snr * bg_rms / fg_rms
+            if bg.shape[0] != combined_size:
+                raise ValueError(bg.shape)
             bg[start:start + fg.shape[0]] = bg[start:start + fg.shape[0]] + scale*fg
             mixed_clips.append(bg / 2)
 
@@ -374,7 +397,12 @@ def mix_clips_batch(
         mixed_clips_batch = mixed_clips_batch[error_index]
         labels_batch = labels_batch[error_index]
 
-        yield mixed_clips_batch, labels_batch
+        if not return_background_clips:
+            yield mixed_clips_batch, labels_batch, None
+        else:
+            background_clips_batch_delayed = (torch.vstack(background_clips_batch_delayed).numpy()
+                                              * 32767).astype(np.int16)[error_index]
+            yield mixed_clips_batch, labels_batch, background_clips_batch_delayed
 
 
 # Reverberation data augmentation function
