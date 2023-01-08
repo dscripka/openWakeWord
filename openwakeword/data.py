@@ -27,6 +27,7 @@ from speechbrain.dataio.dataio import read_audio
 from speechbrain.processing.signal_processing import reverberate
 import torchaudio
 import mutagen
+import acoustics
 
 
 # Load audio clips and structure into clips of the same length
@@ -259,9 +260,12 @@ def mix_clips_batch(
         snr_low: float = 0,
         snr_high: float = 0,
         start_index: List[int] = [],
+        foreground_durations: List[float] = [],
+        foreground_truncate_strategy: str = "random",
         rirs: List[str] = [],
         rir_probability: int = 1,
         volume_augmentation: bool = True,
+        generated_noise_augmentation: float = 0.0,
         shuffle: bool = True,
         return_background_clips: bool = False,
         return_background_clips_delay: Tuple[int, int] = (0, 0),
@@ -285,7 +289,13 @@ def mix_clips_batch(
         snr_low (float): The low SNR level of the mixing in db
         snr_high (float): The high snr level of the mixing in db
         start_index (List[int]): The starting position (in samples) for the foreground clip to start in
-                                 the background clip.
+                                 the background clip. If the foreground clip is longer than `combined_size`
+                                 when starting at this point, the foreground clip will be truncated
+                                 according to the `foreground_truncate_strategy` argument.
+        foreground_durations (List[float]): The desired duration of each foreground clip (in seconds)
+        foreground_truncate_strategy (str): The method used to truncate the foreground clip, if needed based on the
+                                            `start_index`, `foreground_durations`, and `combined_size` arguments.
+                                            See the options in the `truncate_clip` method.
         rirs (List[str]): A list of paths to room impulse response functions (RIR) to convolve with the
                           clips to simulate different recording environments. Applies a single random selection from the
                           list RIR file to the entire batch. If empty (the default), nothing is done.
@@ -294,6 +304,9 @@ def mix_clips_batch(
                                     This simply scales the data of each clip such that the maximum value is is between
                                     0.02 and 1.0 (the floor shouldn't be zero as beyond a certain point the audio data
                                     is no longer valid).
+        generated_noise_augmentation: The probability of mixing the foreground clip with generated random noise
+                                      instead of a provided background clip. With be either "white", "brown",
+                                      "blue", "pink", or "violet" noise.
         return_background_clips (bool): Whether to return the segment of the background clip that was mixed with each
                                         foreground clip in the batch.
         return_background_clips_delay (Tuple(int)): The lower and upper bound of a random delay (in samples)
@@ -331,29 +344,44 @@ def mix_clips_batch(
         foreground_clips = np.array(foreground_clips)[p].tolist()
         start_index = np.array(start_index)[p].tolist()
         labels = np.array(labels)[p].tolist()
+        if foreground_durations:
+            foreground_durations = np.array(foreground_durations)[p].tolist()
 
     for i in range(0, len(foreground_clips), batch_size):
-        # Load foreground clips/start indices and truncate (if needed)
-        foreground_clips_batch = [read_audio(i)[0:combined_size] for i in foreground_clips[i:i+batch_size]]
+        # Load foreground clips/start indices and truncate as needed
+        sr = 16000
         start_index_batch = start_index[i:i+batch_size]
+        foreground_clips_batch = [read_audio(j) for j in foreground_clips[i:i+batch_size]]
+        foreground_clips_batch = [j[0] if len(j.shape) > 1 else j for j in foreground_clips_batch]
+        if foreground_durations:
+            foreground_clips_batch = [truncate_clip(j, int(k*sr), foreground_truncate_strategy)
+                                    for j, k in zip(foreground_clips_batch, foreground_durations[i:i+batch_size])]
         labels_batch = np.array(labels[i:i+batch_size])
 
         # Load background clips and pad/truncate as needed
-        background_clips_batch = [read_audio(i) for i in random.sample(background_clips, batch_size)]
-        background_clips_batch = [i[0] if len(i.shape) > 1 else i for i in background_clips_batch]
-        background_clips_batch_delayed = []
-        delay = np.random.randint(return_background_clips_delay[0], return_background_clips_delay[1] + 1)
-        for ndx, background_clip in enumerate(background_clips_batch):
-            if background_clip.shape[0] < (combined_size + delay):
-                repeated = background_clip.repeat(
-                    np.ceil((combined_size + delay)/background_clip.shape[0]).astype(np.int32)
-                )
-                background_clips_batch[ndx] = repeated[0:combined_size]
-                background_clips_batch_delayed.append(repeated[0+delay:combined_size + delay].clone())
-            elif background_clip.shape[0] > (combined_size + delay):
-                r = np.random.randint(0, max(1, background_clip.shape[0] - combined_size - delay))
-                background_clips_batch[ndx] = background_clip[r:r + combined_size]
-                background_clips_batch_delayed.append(background_clip[r+delay:r + combined_size + delay].clone())
+        if np.random.random() < generated_noise_augmentation:
+            noise_color = ["white", "pink", "blue", "brown", "violet"]
+            background_clips_batch = [torch.from_numpy(
+                                        acoustics.generator.noise(combined_size, color=np.random.choice(noise_color))
+                                      )
+                                      for _ in range(batch_size)]
+            background_clips_batch = [i/i.max() for i in background_clips_batch]
+        else:
+            background_clips_batch = [read_audio(j) for j in random.sample(background_clips, batch_size)]
+            background_clips_batch = [j[0] if len(j.shape) > 1 else j for j in background_clips_batch]
+            background_clips_batch_delayed = []
+            delay = np.random.randint(return_background_clips_delay[0], return_background_clips_delay[1] + 1)
+            for ndx, background_clip in enumerate(background_clips_batch):
+                if background_clip.shape[0] < (combined_size + delay):
+                    repeated = background_clip.repeat(
+                        np.ceil((combined_size + delay)/background_clip.shape[0]).astype(np.int32)
+                    )
+                    background_clips_batch[ndx] = repeated[0:combined_size]
+                    background_clips_batch_delayed.append(repeated[0+delay:combined_size + delay].clone())
+                elif background_clip.shape[0] > (combined_size + delay):
+                    r = np.random.randint(0, max(1, background_clip.shape[0] - combined_size - delay))
+                    background_clips_batch[ndx] = background_clip[r:r + combined_size]
+                    background_clips_batch_delayed.append(background_clip[r+delay:r + combined_size + delay].clone())
 
         # Mix clips at snr levels
         snrs_db = np.random.uniform(snr_low, snr_high, batch_size)
@@ -404,6 +432,35 @@ def mix_clips_batch(
                                               * 32767).astype(np.int16)[error_index]
             yield mixed_clips_batch, labels_batch, background_clips_batch_delayed
 
+def truncate_clip(x, max_size, method="truncate_start"):
+    """
+    Truncates and audio clip with the specified method
+
+    Args:
+        x (nd.array): An array of audio data
+        max_size (int): The maximum size (in samples)
+        method (str): Can be one of four options:
+            - "truncate_start": Truncate the start of the clip
+            - "truncate_end": Truncate the end of the clip
+            - "truncate_both": Truncate both the start and end of the clip
+            - "random": Randomly select a segment of the right size from the clip
+
+    Returns:
+        nd.array: The truncated audio data
+    """
+    if x.shape[0] > max_size:
+        if method == "truncate_start":
+            x = x[x.shape[0] - max_size:]
+        if method == "truncate_end":
+            x = x[0:max_size]
+        if method == "truncate_both":
+            n = int(np.ceil(x.shape[0] - max_size)/2)
+            x = x[n:-n][0:max_size]
+        if method == "random":
+            rn = np.random.randint(0, x.shape[0] - max_size)
+            x = x[rn:rn + max_size]
+
+    return x
 
 # Reverberation data augmentation function
 def apply_reverb(x, rir_files):

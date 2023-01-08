@@ -22,9 +22,13 @@
 
 # Imports
 import os
+import platform
 import collections
 import time
-import pyaudio
+if platform.system() == "Windows":
+    import pyaudiowpatch as pyaudio
+else:
+    import pyaudio
 import numpy as np
 from openwakeword.model import Model
 import scipy.io.wavfile
