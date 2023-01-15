@@ -36,6 +36,7 @@ class Model():
             self,
             wakeword_model_paths: List[str] = [],
             class_mapping_dicts: List[dict] = [],
+            enable_speex_noise_suppression: bool = False,
             **kwargs
             ):
         """Initialize the openWakeWord model object.
@@ -46,6 +47,10 @@ class Model():
             class_mapping_dicts (List[dict]): A list of dictionaries with integer to string class mappings for
                                               each model in the `wakeword_model_paths` arguments
                                               (e.g., {"0": "class_1", "1": "class_2"})
+            enable_speex_noise_suppression (bool): Whether to use the noise suppresion from the SpeexDSP library to pre-process
+                                                  all incoming audio. May increase model performance when reasonably stationary
+                                                  background noise is present in the environment where openWakeWord will be used.
+                                                  It is very lightweight, so enabling it doesn't significantly impact efficiency.
         """
 
         # Initialize the ONNX models and store them
@@ -82,6 +87,13 @@ class Model():
         # Create buffer to store frame predictions
         self.prediction_buffer: DefaultDict[str, deque] = defaultdict(partial(deque, maxlen=30))
 
+        # Initialize SpeexDSP noise canceller
+        if enable_speex_noise_suppression:
+            from speexdsp_ns import NoiseSuppression
+            self.speex_ns = NoiseSuppression.create(160, 16000)
+        else:
+            self.speex_ns = None
+        
         # Create AudioFeatures object
         self.preprocessor = AudioFeatures(**kwargs)
 
@@ -123,13 +135,16 @@ class Model():
                   wake-word/wake-phrase detected. If the `timing` argument is true, returns a
                   tuple of dicts containing model predictions and timing information, respectively.
         """
-        # Get audio features
+        # Get audio features (optionally with Speex noise suppression)
         if timing:
             timing_dict: Dict[str, Dict] = {}
             timing_dict["models"] = {}
             feature_start = time.time()
 
-        self.preprocessor(x)
+        if self.speex_ns:
+            self.preprocessor(self._suppress_noise_with_speex(x))
+        else:
+            self.preprocessor(x)
 
         if timing:
             feature_end = time.time()
@@ -220,3 +235,28 @@ class Model():
             predictions.append(self.predict(data[i:i+step_size], **kwargs))
 
         return predictions
+
+    def _suppress_noise_with_speex(self, x: np.ndarray, frame_size: int = 160):
+        """
+        Runs the input audio through the SpeexDSP noise suppression algorithm.
+        Note that this function updates the state of the existing Speex noise
+        suppression object, and isn't intended to be called externally.
+
+        Args:
+            x (ndarray): The 16-bit, 16khz audio to process. Must always be an
+                         integer multiple of `frame_size`.
+            frame_size (int): The frame size to use for the Speex Noise suppressor.
+                              Must match the frame size specified during the 
+                              initialization of the noise suppressor.
+        
+        Returns:
+            ndarray: The input audio with noise suppression applied
+        """
+        cleaned = []
+        for i in range(0, x.shape[0], frame_size):
+            chunk = x[i:i+frame_size]
+            cleaned.append(self.speex_ns.process(chunk.tobytes()))
+
+        cleaned = b''.join(cleaned)
+        cleaned = np.frombuffer(cleaned, np.int16)
+        return cleaned
