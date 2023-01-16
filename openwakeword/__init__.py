@@ -1,8 +1,7 @@
 import os
 from openwakeword.model import Model
-from openwakeword.vad import VAD
 
-__all__ = ['Model', 'VAD']
+__all__ = ['Model']
 
 models = {
     "alexa": {
