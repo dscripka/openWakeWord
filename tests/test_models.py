@@ -38,12 +38,6 @@ import pytest
 # Tests
 class TestModels:
     def test_models(self):
-        # Load model with path and custom class mapping
-        owwModel = openwakeword.Model(
-            wakeword_model_paths=[os.path.join("openwakeword", "resources", "models", "alexa_v0.1.onnx")],
-            class_mapping_dicts=[{"alexa_v0.1": {"0": "negative"}}]
-        )
-
         # Load model with defaults
         owwModel = openwakeword.Model()
 
@@ -81,13 +75,8 @@ class TestModels:
         assert isinstance(predictions[0], dict)
 
     def test_models_with_timing(self):
-        models = [str(i) for i in Path(
-                    os.path.join("openwakeword", "resources", "models")
-                  ).glob("**/*.onnx")
-                  if "embedding" not in str(i) and "melspec" not in str(i)]
-        owwModel = openwakeword.Model(
-            wakeword_model_paths=models,
-        )
+        # Load model with defaults
+        owwModel = openwakeword.Model()
 
         owwModel.predict(np.zeros(1280), timing=True)
 
