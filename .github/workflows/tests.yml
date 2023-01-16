@@ -10,7 +10,7 @@ on:
     branches: [ "main" ]
 
 jobs:
-  unit_tests:
+  unit_tests_linux:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -32,8 +32,8 @@ jobs:
     - name: Test with pytest
       run: |
         pytest
-
-  unit_tests:
+  
+  unit_tests_windows:
     runs-on: windows-latest
     strategy:
       matrix:
