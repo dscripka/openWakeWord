@@ -355,7 +355,7 @@ def mix_clips_batch(
         foreground_clips_batch = [j[0] if len(j.shape) > 1 else j for j in foreground_clips_batch]
         if foreground_durations:
             foreground_clips_batch = [truncate_clip(j, int(k*sr), foreground_truncate_strategy)
-                                    for j, k in zip(foreground_clips_batch, foreground_durations[i:i+batch_size])]
+                                      for j, k in zip(foreground_clips_batch, foreground_durations[i:i+batch_size])]
         labels_batch = np.array(labels[i:i+batch_size])
 
         # Load background clips and pad/truncate as needed
@@ -383,7 +383,7 @@ def mix_clips_batch(
             if bg.shape[0] != combined_size:
                 raise ValueError(bg.shape)
             mixed_clip = mix_clip(fg, bg, snr, start)
-            
+
             if np.random.random() < generated_noise_augmentation:
                 noise_color = ["white", "pink", "blue", "brown", "violet"]
                 noise_clip = acoustics.generator.noise(combined_size, color=np.random.choice(noise_color))
@@ -428,12 +428,14 @@ def mix_clips_batch(
                                               * 32767).astype(np.int16)[error_index]
             yield mixed_clips_batch, labels_batch, background_clips_batch_delayed
 
+
 def mix_clip(fg, bg, snr, start):
     fg_rms, bg_rms = fg.norm(p=2), bg.norm(p=2)
     snr = 10 ** (snr / 20)
     scale = snr * bg_rms / fg_rms
     bg[start:start + fg.shape[0]] = bg[start:start + fg.shape[0]] + scale*fg
     return bg / 2
+
 
 def truncate_clip(x, max_size, method="truncate_start"):
     """
@@ -464,6 +466,7 @@ def truncate_clip(x, max_size, method="truncate_start"):
             x = x[rn:rn + max_size]
 
     return x
+
 
 # Reverberation data augmentation function
 def apply_reverb(x, rir_files):
