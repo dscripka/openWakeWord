@@ -21,6 +21,9 @@ def build_install_requires():
         install_requires=[
             'onnxruntime>=1.10.0,<2',
         ]
+    else:
+        install_requires = ['onnxruntime>=1.10.0,<2']
+
     return install_requires
 
 setuptools.setup(
