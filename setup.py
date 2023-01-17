@@ -7,6 +7,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 # Build install_requires based on platform
 def build_install_requires():
     py_version = platform.python_version()[0:3].replace('.', "")
+    print(py_version, platform.system(), platform.machine())
     if platform.system() == "Linux" and platform.machine() == "x86_64":
         install_requires=[
             'onnxruntime>=1.10.0,<2',
