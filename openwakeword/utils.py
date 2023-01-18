@@ -304,8 +304,8 @@ class AudioFeatures():
         if self.feature_buffer.shape[0] > self.feature_buffer_max_len:
             self.feature_buffer = self.feature_buffer[-self.feature_buffer_max_len:, :]
 
-    def get_features(self, n_feature_frames=16):
-        return self.feature_buffer[-n_feature_frames:, :][None, ].astype(np.float32)
+    def get_features(self, n_feature_frames: int = 16):
+        return self.feature_buffer[int(-1*n_feature_frames):, :][None, ].astype(np.float32)
 
     def __call__(self, x):
         self._streaming_features(x)

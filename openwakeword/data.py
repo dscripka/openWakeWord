@@ -304,9 +304,9 @@ def mix_clips_batch(
                                     This simply scales the data of each clip such that the maximum value is is between
                                     0.02 and 1.0 (the floor shouldn't be zero as beyond a certain point the audio data
                                     is no longer valid).
-        generated_noise_augmentation: The probability of mixing the foreground clip with generated random noise
-                                      instead of a provided background clip. With be either "white", "brown",
-                                      "blue", "pink", or "violet" noise.
+        generated_noise_augmentation: The probability of further mixing the mixed clip with generated random noise.
+                                      Will be either "white", "brown", "blue", "pink", or "violet" noise, mixed at a
+                                      random SNR between `snr_low` and `snr_high`.
         return_background_clips (bool): Whether to return the segment of the background clip that was mixed with each
                                         foreground clip in the batch.
         return_background_clips_delay (Tuple(int)): The lower and upper bound of a random delay (in samples)
@@ -355,46 +355,42 @@ def mix_clips_batch(
         foreground_clips_batch = [j[0] if len(j.shape) > 1 else j for j in foreground_clips_batch]
         if foreground_durations:
             foreground_clips_batch = [truncate_clip(j, int(k*sr), foreground_truncate_strategy)
-                                    for j, k in zip(foreground_clips_batch, foreground_durations[i:i+batch_size])]
+                                      for j, k in zip(foreground_clips_batch, foreground_durations[i:i+batch_size])]
         labels_batch = np.array(labels[i:i+batch_size])
 
         # Load background clips and pad/truncate as needed
-        if np.random.random() < generated_noise_augmentation:
-            noise_color = ["white", "pink", "blue", "brown", "violet"]
-            background_clips_batch = [torch.from_numpy(
-                                        acoustics.generator.noise(combined_size, color=np.random.choice(noise_color))
-                                      )
-                                      for _ in range(batch_size)]
-            background_clips_batch = [i/i.max() for i in background_clips_batch]
-        else:
-            background_clips_batch = [read_audio(j) for j in random.sample(background_clips, batch_size)]
-            background_clips_batch = [j[0] if len(j.shape) > 1 else j for j in background_clips_batch]
-            background_clips_batch_delayed = []
-            delay = np.random.randint(return_background_clips_delay[0], return_background_clips_delay[1] + 1)
-            for ndx, background_clip in enumerate(background_clips_batch):
-                if background_clip.shape[0] < (combined_size + delay):
-                    repeated = background_clip.repeat(
-                        np.ceil((combined_size + delay)/background_clip.shape[0]).astype(np.int32)
-                    )
-                    background_clips_batch[ndx] = repeated[0:combined_size]
-                    background_clips_batch_delayed.append(repeated[0+delay:combined_size + delay].clone())
-                elif background_clip.shape[0] > (combined_size + delay):
-                    r = np.random.randint(0, max(1, background_clip.shape[0] - combined_size - delay))
-                    background_clips_batch[ndx] = background_clip[r:r + combined_size]
-                    background_clips_batch_delayed.append(background_clip[r+delay:r + combined_size + delay].clone())
+        background_clips_batch = [read_audio(j) for j in random.sample(background_clips, batch_size)]
+        background_clips_batch = [j[0] if len(j.shape) > 1 else j for j in background_clips_batch]
+        background_clips_batch_delayed = []
+        delay = np.random.randint(return_background_clips_delay[0], return_background_clips_delay[1] + 1)
+        for ndx, background_clip in enumerate(background_clips_batch):
+            if background_clip.shape[0] < (combined_size + delay):
+                repeated = background_clip.repeat(
+                    np.ceil((combined_size + delay)/background_clip.shape[0]).astype(np.int32)
+                )
+                background_clips_batch[ndx] = repeated[0:combined_size]
+                background_clips_batch_delayed.append(repeated[0+delay:combined_size + delay].clone())
+            elif background_clip.shape[0] > (combined_size + delay):
+                r = np.random.randint(0, max(1, background_clip.shape[0] - combined_size - delay))
+                background_clips_batch[ndx] = background_clip[r:r + combined_size]
+                background_clips_batch_delayed.append(background_clip[r+delay:r + combined_size + delay].clone())
 
         # Mix clips at snr levels
         snrs_db = np.random.uniform(snr_low, snr_high, batch_size)
         mixed_clips = []
         for fg, bg, snr, start in zip(foreground_clips_batch, background_clips_batch,
                                       snrs_db, start_index_batch):
-            fg_rms, bg_rms = fg.norm(p=2), bg.norm(p=2)
-            snr = 10 ** (snr / 20)
-            scale = snr * bg_rms / fg_rms
             if bg.shape[0] != combined_size:
                 raise ValueError(bg.shape)
-            bg[start:start + fg.shape[0]] = bg[start:start + fg.shape[0]] + scale*fg
-            mixed_clips.append(bg / 2)
+            mixed_clip = mix_clip(fg, bg, snr, start)
+
+            if np.random.random() < generated_noise_augmentation:
+                noise_color = ["white", "pink", "blue", "brown", "violet"]
+                noise_clip = acoustics.generator.noise(combined_size, color=np.random.choice(noise_color))
+                noise_clip = torch.from_numpy(noise_clip/noise_clip.max())
+                mixed_clip = mix_clip(mixed_clip, noise_clip, np.random.choice(snrs_db), 0)
+
+            mixed_clips.append(mixed_clip)
 
         mixed_clips_batch = torch.vstack(mixed_clips)
 
@@ -432,6 +428,15 @@ def mix_clips_batch(
                                               * 32767).astype(np.int16)[error_index]
             yield mixed_clips_batch, labels_batch, background_clips_batch_delayed
 
+
+def mix_clip(fg, bg, snr, start):
+    fg_rms, bg_rms = fg.norm(p=2), bg.norm(p=2)
+    snr = 10 ** (snr / 20)
+    scale = snr * bg_rms / fg_rms
+    bg[start:start + fg.shape[0]] = bg[start:start + fg.shape[0]] + scale*fg
+    return bg / 2
+
+
 def truncate_clip(x, max_size, method="truncate_start"):
     """
     Truncates and audio clip with the specified method
@@ -461,6 +466,7 @@ def truncate_clip(x, max_size, method="truncate_start"):
             x = x[rn:rn + max_size]
 
     return x
+
 
 # Reverberation data augmentation function
 def apply_reverb(x, rir_files):
@@ -500,7 +506,7 @@ class mmap_batch_generator:
     """
     def __init__(self,
                  data_files: dict,
-                 batch_size: int,
+                 batch_size: int = 128,
                  n_per_class: dict = {},
                  data_transform_funcs: dict = {},
                  label_transform_funcs: dict = {}
@@ -552,22 +558,22 @@ class mmap_batch_generator:
         #     self.shapes[lbl] = (new_shape[0]*self.original_shapes[lbl][0], new_shape[1], new_shape[2])
 
         # Calculate batch sizes, if the user didn't specify them
+        scale_factor = 1
         if not self.n_per_class:
             self.n_per_class = {}
             for lbl, shape in self.shapes.items():
                 dummy_data = np.random.random((10, self.shapes[lbl][1], self.shapes[lbl][2]))
                 if self.data_transform_funcs.get(lbl, None):
                     scale_factor = self.data_transform_funcs.get(lbl, None)(dummy_data).shape[0]/10
-                else:
-                    scale_factor = 1
+
                 ratio = self.shapes[lbl][0]/sum([i[0] for i in self.shapes.values()])
                 self.n_per_class[lbl] = max(1, int(int(batch_size*ratio)/scale_factor))
 
-        # Get estimated batches per epoch, including the effect of any user-provided transforms
-        batch_size = sum([val*scale_factor for val in self.n_per_class.values()])
-        batches_per_epoch = sum([i[0] for i in self.shapes.values()])//batch_size
-        self.batch_per_epoch = batches_per_epoch
-        print("Batches/steps per epoch:", batches_per_epoch)
+            # Get estimated batches per epoch, including the effect of any user-provided transforms
+            batch_size = sum([val*scale_factor for val in self.n_per_class.values()])
+            batches_per_epoch = sum([i[0] for i in self.shapes.values()])//batch_size
+            self.batch_per_epoch = batches_per_epoch
+            print("Batches/steps per epoch:", batches_per_epoch)
 
     def __iter__(self):
         return self

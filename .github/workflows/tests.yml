@@ -10,12 +10,33 @@ on:
     branches: [ "main" ]
 
 jobs:
-  build:
-
-    runs-on: ${{ matrix.os }}
+  unit_tests_linux:
+    runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.8"]
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        lfs: true
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v3
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install dependencies
+      run: |
+        sudo apt-get install libspeexdsp-dev
+        python -m pip install --upgrade pip
+        pip install -e .[test]
+    - name: Test with pytest
+      run: |
+        pytest
+  
+  unit_tests_windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
         python-version: ["3.8"]
 
     steps:

@@ -33,17 +33,32 @@ import numpy as np
 from pathlib import Path
 import collections
 import pytest
+import platform
 
 
 # Tests
 class TestModels:
-    def test_models(self):
-        # Load model with path and custom class mapping
-        owwModel = openwakeword.Model(
-            wakeword_model_paths=[os.path.join("openwakeword", "resources", "models", "alexa_v0.1.onnx")],
-            class_mapping_dicts=[{"alexa_v0.1": {"0": "negative"}}]
-        )
+    def test_load_models_by_path(self):
+        # Load model with defaults
+        owwModel = openwakeword.Model(wakeword_model_paths=[
+                                        os.path.join("openwakeword", "resources", "models", "alexa_v0.1.onnx")
+                                      ])
 
+        # Prediction on random data
+        owwModel.predict(np.random.randint(-1000, 1000, 1280).astype(np.int16))
+
+    def test_custom_model_label_mapping_dict(self):
+        # Load model with model path
+        owwModel = openwakeword.Model(wakeword_model_paths=[
+                                        os.path.join("openwakeword", "resources", "models", "alexa_v0.1.onnx")
+                                      ],
+                                      class_mapping_dicts=[{"alexa_v0.1": {"0": "positive"}}]
+                                      )
+
+        # Prediction on random data
+        owwModel.predict(np.random.randint(-1000, 1000, 1280).astype(np.int16))
+
+    def test_models(self):
         # Load model with defaults
         owwModel = openwakeword.Model()
 
@@ -71,6 +86,38 @@ class TestModels:
                 else:
                     assert max(predictions_flat[key]) < 0.5
 
+    def test_models_with_speex_noise_cancellation(self):
+        # Skip test on Windows for now
+        if platform.system() == "Windows":
+            assert 1 == 1
+        else:
+            # Load model with defaults
+            owwModel = openwakeword.Model(enable_speex_noise_suppression=True)
+
+            # Get clips for each model (assumes that test clips will have the model name in the filename)
+            test_dict = {}
+            for mdl_name in owwModel.models.keys():
+                all_clips = [str(i) for i in Path(os.path.join("tests", "data")).glob("*.wav")]
+                test_dict[mdl_name] = [i for i in all_clips if mdl_name in i]
+
+            # Predict
+            for model, clips in test_dict.items():
+                for clip in clips:
+                    # Get predictions for reach frame in the clip
+                    predictions = owwModel.predict_clip(clip)
+                    owwModel.reset()  # reset after each clip to ensure independent results
+
+                    # Make predictions dictionary flatter
+                    predictions_flat = collections.defaultdict(list)
+                    [predictions_flat[key].append(i[key]) for i in predictions for key in i.keys()]
+
+                # Check scores against default threshold (0.5)
+                for key in predictions_flat.keys():
+                    if key in clip:
+                        assert max(predictions_flat[key]) >= 0.5
+                    else:
+                        assert max(predictions_flat[key]) < 0.5
+
     def test_predict_clip_with_array(self):
         # Load model with defaults
         owwModel = openwakeword.Model()
@@ -81,13 +128,8 @@ class TestModels:
         assert isinstance(predictions[0], dict)
 
     def test_models_with_timing(self):
-        models = [str(i) for i in Path(
-                    os.path.join("openwakeword", "resources", "models")
-                  ).glob("**/*.onnx")
-                  if "embedding" not in str(i) and "melspec" not in str(i)]
-        owwModel = openwakeword.Model(
-            wakeword_model_paths=models,
-        )
+        # Load model with defaults
+        owwModel = openwakeword.Model()
 
         owwModel.predict(np.zeros(1280), timing=True)
 
