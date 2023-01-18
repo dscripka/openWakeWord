@@ -37,6 +37,7 @@ class Model():
             wakeword_model_paths: List[str] = [],
             class_mapping_dicts: List[dict] = [],
             enable_speex_noise_suppression: bool = False,
+            vad_threshold: float = 0,
             **kwargs
             ):
         """Initialize the openWakeWord model object.
@@ -53,6 +54,11 @@ class Model():
                                                    is present in the environment where openWakeWord will be used.
                                                    It is very lightweight, so enabling it doesn't significantly
                                                    impact efficiency.
+            vad_threshold (float): Whether to use a voice activity detection model (VAD) from Silero
+                                   (https://github.com/snakers4/silero-vad) to filter predictions.
+                                   For every input audio frame, a VAD score is obtained and only those model predictions
+                                   with VAD scores above the threshold will be returned. The default value (0),
+                                   disables voice activity detection entirely.
         """
 
         # Initialize the ONNX models and store them
@@ -96,6 +102,11 @@ class Model():
         else:
             self.speex_ns = None
 
+        # Initialize Silero VAD
+        self.vad_threshold = vad_threshold
+        if vad_threshold > 0:
+            self.vad = openwakeword.VAD()
+
         # Create AudioFeatures object
         self.preprocessor = AudioFeatures(**kwargs)
 
@@ -114,7 +125,7 @@ class Model():
         """Reset the prediction buffer"""
         self.prediction_buffer = defaultdict(partial(deque, maxlen=30))
 
-    def predict(self, x: Union[np.ndarray], patience: dict = {}, threshold: dict = {}, timing: bool = False):
+    def predict(self, x: np.ndarray, patience: dict = {}, threshold: dict = {}, timing: bool = False):
         """Predict with all of the wakeword models on the input audio frames
 
         Args:
@@ -137,20 +148,21 @@ class Model():
                   wake-word/wake-phrase detected. If the `timing` argument is true, returns a
                   tuple of dicts containing model predictions and timing information, respectively.
         """
-        # Get audio features (optionally with Speex noise suppression)
+
+        # Setup timing dict
         if timing:
             timing_dict: Dict[str, Dict] = {}
             timing_dict["models"] = {}
             feature_start = time.time()
 
+        # Get audio features (optionally with Speex noise suppression)
         if self.speex_ns:
             self.preprocessor(self._suppress_noise_with_speex(x))
         else:
             self.preprocessor(x)
 
         if timing:
-            feature_end = time.time()
-            timing_dict["models"]["preprocessor"] = feature_end - feature_start
+            timing_dict["models"]["preprocessor"] = time.time() - feature_start
 
         # Get predictions from model(s)
         predictions = {}
@@ -179,8 +191,7 @@ class Model():
 
             # Get timing information
             if timing:
-                model_end = time.time()
-                timing_dict["models"][mdl] = model_end - model_start
+                timing_dict["models"][mdl] = time.time() - model_start
 
         # Update scores based on thresholds or patience arguments
         if patience != {}:
@@ -193,6 +204,23 @@ class Model():
                     scores = np.array(self.prediction_buffer[mdl])[-patience[parent_model]:]
                     if (scores >= threshold[parent_model]).sum() < patience[parent_model]:
                         predictions[mdl] = 0.0
+
+        # (optionally) get voice activity detection scores and update model scores
+        if self.vad_threshold > 0:
+            if timing:
+                vad_start = time.time()
+
+            self.vad(x)
+
+            if timing:
+                timing_dict["models"]["vad"] = time.time() - vad_start
+
+            # Get frames from last 0.4 to 0.56 seconds (3 frames) and get max VAD score
+            vad_frames = list(self.vad.prediction_buffer)[-7:-4]
+            vad_avg_score = np.max(vad_frames) if len(vad_frames) > 0 else 0
+            for mdl in predictions.keys():
+                if vad_avg_score < self.vad_threshold:
+                    predictions[mdl] = 0.0
 
         if timing:
             return predictions, timing_dict
