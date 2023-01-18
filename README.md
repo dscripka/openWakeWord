@@ -18,6 +18,9 @@ Installing openWakeWord is simple and has minimal dependencies:
 pip install openwakeword
 ```
 
+To (optionally) use [Speex](https://www.speex.org/) noise suppresion on Linux systems to improve performance in noisy environments, install the Speex dependencies: `sudo apt-get install libspeexdsp-dev
+` Many thanks to [TeaPoly](https://github.com/TeaPoly/speexdsp-ns-python) for their Python wrapper of the Speex noise supression libraries.
+
 For quick local testing, use the included [example script](examples/detect_from_microphone.py) to try streaming detection from a local microphone.
 
 Adding openWakeWord to your own Python code requires just a few lines:
@@ -124,6 +127,8 @@ If you are aware of other open-source wakeword/phrase libraries that should be a
 
 ## Other Performance Details
 
+### Model Robustness
+
 Due to a combination of variability in the generated speech and the extensive pre-training from Google, openWakeWord models also demonstrate some additional performance benefits that are useful for real-world applications. In testing, three in particular have been observed.
 
 1) The trained models seem to respond reasonably well to wakewords and phrases that are [whispered](https://en.wikipedia.org/wiki/Whispering). This is somewhat surprising behavior, as the text-to-speech models used for producing training data generally do not create synthetic speech that has acoustic qualities similar to whispering.
@@ -132,6 +137,9 @@ Due to a combination of variability in the generated speech and the extensive pr
 
 3) The models are able to handle some variability in the phrasing of a given command. This behavior was not entirely a surpise, given that [others](https://arxiv.org/abs/1904.03670) have reported similar benefits when training end-to-end spoken language understanding systems. For example, the included [pre-trained weather model](docs/models/weather.md) will typically still respond correctly to a phrase like "how is the weather today" despite not training directly on that phrase (though false rejections rates will likely be higher, on average, compared to phrases closer to the training data).
 
+### Background Noise
+
+While the models are trained with background noise to increase robustness, in some cases additional noise suppresion can improve performance. Setting the `enable_speex_noise_suppression=True` argument during openWakeWord model initialization will use the efficient Speex noise suppresion algorithm to pre-process the audio data prior to prediction. This can reduce both false-reject rates and false-accept rates, though testing in a realistic deployment environment is strongly reccomended.
 
 # Training New Models
 
