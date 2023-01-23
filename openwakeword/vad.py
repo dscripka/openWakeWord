@@ -82,7 +82,7 @@ class VAD():
         self.prediction_buffer: deque = deque(maxlen=125)  # buffer lenght of 10 seconds
 
         # Set model parameters
-        self.sample_rate = np.array(16000)
+        self.sample_rate = np.array(16000).astype(np.int64)
 
         # Reset model to start
         self.reset_states()
