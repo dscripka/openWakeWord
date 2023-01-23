@@ -120,7 +120,7 @@ class TestModels:
 
     def test_models_with_vad(self):
         # Load model with defaults
-        owwModel = openwakeword.Model(enable_speex_noise_suppression=True, vad_threshold=0.5)
+        owwModel = openwakeword.Model(vad_threshold=0.5)
 
         # Get clips for each model (assumes that test clips will have the model name in the filename)
         test_dict = {}
@@ -159,7 +159,7 @@ class TestModels:
         # Load model with defaults
         owwModel = openwakeword.Model(vad_threshold=0.5)
 
-        owwModel.predict(np.zeros(1280), timing=True)
+        owwModel.predict(np.zeros(1280).astype(np.int16), timing=True)
 
     def test_prediction_with_patience(self):
         owwModel = openwakeword.Model()
