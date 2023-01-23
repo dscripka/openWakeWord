@@ -315,6 +315,7 @@ class AudioFeatures():
 def bulk_predict(
                  file_paths: List[str],
                  wakeword_model_paths: List[str],
+                 prediction_function: str = 'predict_clip',
                  ncpu: int = 1,
                  **kwargs
                  ):
@@ -324,6 +325,8 @@ def bulk_predict(
     Args:
         input_paths (List[str]): The list of input file to predict
         wakeword_model_path (List[str])): The paths to the wakeword ONNX model files
+        prediction_function (str): The name of the method used to predict on the input audio files
+                                   (default is the `predict_clip` method)
         ncpu (int): How many processes to create (up to max of available CPUs)
         kwargs (dict): Any other keyword arguments to pass to the model prediction function (`predict_clip`)
 
@@ -351,7 +354,7 @@ def bulk_predict(
         def f(clips):
             results = []
             for clip in clips:
-                results.append({clip: mdls[-1].predict_clip(clip, **kwargs)})
+                results.append({clip: getattr(mdls[-1], prediction_function)(clip, **kwargs)})
             q.put(results)
 
         ps.append(Process(target=f, args=(chunk,)))

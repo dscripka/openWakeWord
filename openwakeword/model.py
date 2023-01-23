@@ -266,6 +266,44 @@ class Model():
 
         return predictions
 
+    def _get_positive_prediction_frames(self, file: str, threshold: float = 0.5, **kwargs):
+        """
+        Gets predictions for the input audio data, and returns the audio features (embeddings)
+        for all of the frames with a score above the `threshold` argument. Can be a useful
+        way to collect false-positive predictions.
+
+        Args:
+            file (str): The path to a 16-bit 16khz WAV audio file to process
+            threshold (float): The minimum score required for a frame of audio features
+                               to be returned.
+            kwargs: Any keyword arguments to pass to the class `predict` method
+            
+        Returns:
+            dict: A dictionary with filenames as keys and  N x M arrays as values,
+                  where N is the number of examples and M is the number
+                  of audio features, depending on the model input shape.
+        """
+        # Load audio clip as 16-bit PCM data
+        with wave.open(file, mode='rb') as f:
+            # Load WAV clip frames
+            data = np.frombuffer(f.readframes(f.getnframes()), dtype=np.int16)
+
+        # Iterate through clip, getting predictions
+        positive_features = defaultdict(list)
+        step_size = 1280
+        for i in range(0, data.shape[0]-step_size, step_size):
+            predictions = self.predict(data[i:i+step_size], **kwargs)
+            for lbl in predictions.keys():
+                if predictions[lbl] >= threshold:
+                    mdl = self.get_parent_model_from_label(lbl)
+                    features = self.preprocessor.get_features(self.model_inputs[mdl])
+                    positive_features[lbl].append(features)
+
+        for lbl in positive_features.keys():
+            positive_features[lbl] = np.vstack(positive_features[lbl])
+
+        return positive_features
+
     def _suppress_noise_with_speex(self, x: np.ndarray, frame_size: int = 160):
         """
         Runs the input audio through the SpeexDSP noise suppression algorithm.

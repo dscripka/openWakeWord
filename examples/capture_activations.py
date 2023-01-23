@@ -51,6 +51,21 @@ parser.add_argument(
     default=0.5,
     required=False
 )
+parser.add_argument(
+    "--vad_threshold",
+    help="""The threshold to use for voice activity detection (VAD) in the openWakeWord instance.
+            The default (0.0), disables VAD.""",
+    type=float,
+    default=0.0,
+    required=False
+)
+parser.add_argument(
+    "--noise_suppression",
+    help="Whether to enable speex noise suppression in the openWakeWord instance.",
+    type=bool,
+    default=False,
+    required=False
+)
 args=parser.parse_args()
 
 # Get microphone stream
@@ -62,7 +77,10 @@ audio = pyaudio.PyAudio()
 mic_stream = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
 
 # Load pre-trained openwakeword models
-owwModel = Model()
+owwModel = Model(
+    enable_speex_noise_suppression=args.noise_suppression,
+    vad_threshold = args.vad_threshold
+)
 
 # Set waiting period after activation before saving clip (to get some audio context after the activation)
 save_delay = 1  # seconds
