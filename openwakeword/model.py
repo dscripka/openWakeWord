@@ -277,7 +277,7 @@ class Model():
             threshold (float): The minimum score required for a frame of audio features
                                to be returned.
             kwargs: Any keyword arguments to pass to the class `predict` method
-            
+
         Returns:
             dict: A dictionary with filenames as keys and  N x M arrays as values,
                   where N is the number of examples and M is the number
@@ -299,10 +299,11 @@ class Model():
                     features = self.preprocessor.get_features(self.model_inputs[mdl])
                     positive_features[lbl].append(features)
 
+        positive_features_combined = {}
         for lbl in positive_features.keys():
-            positive_features[lbl] = np.vstack(positive_features[lbl])
+            positive_features_combined[lbl] = np.vstack(positive_features[lbl])
 
-        return positive_features
+        return positive_features_combined
 
     def _suppress_noise_with_speex(self, x: np.ndarray, frame_size: int = 160):
         """

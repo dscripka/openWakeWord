@@ -229,25 +229,25 @@ def estimate_mp3_duration(fpath):
     """Estimates the duration of an MP3 file from metadata and file-size.
     Is only accurate for 16000 khz sample rate audio with a relatively
     constant bit-rate.
-    
+
     Args:
         fpath (str): The input path to the MP3 file
-        
+
     Returns:
         float: The duration of the MP3 file in seconds
     """
-    
-    conversion_factors ={
+
+    conversion_factors = {
         "16_khz_single_channel": 0.000333318208471784,
         "16_khz_stereo": 0.000333318208471784/2
     }
-    
+
     duration_seconds = 0
     try:
         md = torchaudio.info(fpath)
     except RuntimeError:
         return duration_seconds
-        
+
     nbytes = os.path.getsize(fpath)
     if md.num_channels == 1:
         if md.sample_rate == 16000:
@@ -255,7 +255,7 @@ def estimate_mp3_duration(fpath):
     elif md.num_channels == 2:
         if md.sample_rate == 16000:
             duration_seconds = nbytes*conversion_factors["16_khz_stereo"]
-        
+
     return duration_seconds
 
 

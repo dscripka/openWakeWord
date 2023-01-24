@@ -181,3 +181,11 @@ class TestModels:
         owwModel = openwakeword.Model()
         target_model_name = list(owwModel.models.keys())[0]
         owwModel.get_parent_model_from_label(target_model_name)
+
+    def test_get_positive_prediction_frames(self):
+        owwModel = openwakeword.Model()
+
+        # Get a clip to use for the test
+        clip = [str(i) for i in Path(os.path.join("tests", "data")).glob("*.wav")][0]
+        features = owwModel._get_positive_prediction_frames(clip)
+        assert list(features.values())[0].shape[0] > 0
