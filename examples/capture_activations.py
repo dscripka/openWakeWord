@@ -88,6 +88,10 @@ save_delay = 1  # seconds
 # Set cooldown period before another clip can be saved
 cooldown = 4  # seconds
 
+# Create output directory if it does not already exist
+if not os.path.exists(args.output_dir):
+    os.mkdir(args.output_dir)
+
 # Run capture loop, checking for hotwords
 if __name__ == "__main__":
     # Predict continuously on audio stream

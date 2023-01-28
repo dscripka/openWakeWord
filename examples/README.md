@@ -6,7 +6,7 @@ Included are several example scripts demonstrating the usage of openWakeWord. So
 
 This is a simple example which allows you to test openWakeWord by using a locally connected microphone. To run the script, follow these steps:
 
-1) Install the example-specific requirements: `pip install plotext pyaudio`
+1) Install the example-specific requirements: `pip install pyaudio`
 
 2) Run the script: `python detect_from_microphone.py`.
 

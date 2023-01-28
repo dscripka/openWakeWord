@@ -13,7 +13,6 @@
 # limitations under the License.
 
 # Imports
-import plotext as plt
 import pyaudio
 import numpy as np
 from openwakeword.model import Model
@@ -32,6 +31,12 @@ owwModel = Model()
 # Run capture loop, checking for hotwords
 if __name__ == "__main__":
     # Predict continuously on audio stream
+    print("\n\n")
+    print("#"*100)
+    print("Listening for wakewords...")
+    print("#"*100)
+    print("\n"*13)
+    
     while True:
         # Get audio
         audio = np.frombuffer(mic_stream.read(CHUNK), dtype=np.int16)
@@ -39,18 +44,21 @@ if __name__ == "__main__":
         # Feed to openWakeWord model
         prediction = owwModel.predict(audio)
 
-        # Get predictions from prediction buffers and plot
-        plt.cld()
-        plt.clt()
+        # Generate output string header
+        n_spaces = 16
+        output_string_header = """
+            Model Name         | Score | Wakeword Status
+            --------------------------------------
+            """
+
         for mdl in owwModel.prediction_buffer.keys():
-            # Plot scores in graph
+            # Add scores in formatted table
             scores = list(owwModel.prediction_buffer[mdl])
-            plt.plot(scores)
+            curr_score = format(scores[-1], '.20f').replace("-", "")
 
-            # Plot text showing name of model with scores >= 0.5 (default threshold)
-            if max(scores) >= 0.5:
-                plt.text(mdl, 15, 0.9, alignment="center", color = "blue", style="bold")
+            output_string_header += f"""{mdl}{" "*(n_spaces - len(mdl))}   | {curr_score[0:5]} | {"--"+" "*20 if scores[-1] <= 0.5 else "Wakeword Detected!"}
+            """
 
-        plt.ylim(0,1)
-        plt.show()
-        plt.sleep(0.005)
+        # Print results table
+        print("\033[F"*14)
+        print(output_string_header, "                             ", end='\r')
