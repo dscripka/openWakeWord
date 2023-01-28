@@ -18,8 +18,14 @@ Installing openWakeWord is simple and has minimal dependencies:
 pip install openwakeword
 ```
 
-To (optionally) use [Speex](https://www.speex.org/) noise suppresion on Linux systems to improve performance in noisy environments, install the Speex dependencies: `sudo apt-get install libspeexdsp-dev
-` Many thanks to [TeaPoly](https://github.com/TeaPoly/speexdsp-ns-python) for their Python wrapper of the Speex noise supression libraries.
+To (optionally) use [Speex](https://www.speex.org/) noise suppresion on Linux systems to improve performance in noisy environments, install the Speex dependencies and then the pre-built Python package (see the assets [here](https://github.com/dscripka/openWakeWord/releases/tag/v0.1.1) for all .whl versions), adjusting for your python version and system architecture as needed.
+
+```
+sudo apt-get install libspeexdsp-dev
+pip install https://github.com/dscripka/openWakeWord/releases/download/v0.1.1/speexdsp_ns-0.1.2-cp38-cp38-linux_x86_64.whl
+```
+
+Many thanks to [TeaPoly](https://github.com/TeaPoly/speexdsp-ns-python) for their Python wrapper of the Speex noise supression libraries.
 
 For quick local testing, use the included [example script](examples/detect_from_microphone.py) to try streaming detection from a local microphone.
 
