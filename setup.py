@@ -4,32 +4,30 @@ import setuptools
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
-# Build install_requires based on platform
-def build_install_requires():
+# Build extras_requires based on platform
+def build_additional_requires():
     py_version = platform.python_version()[0:3].replace('.', "")
     if platform.system() == "Linux" and platform.machine() == "x86_64":
-        install_requires=[
-            'onnxruntime>=1.10.0,<2',
+        additional_requires=[
             f"speexdsp_ns @ https://github.com/dscripka/openWakeWord/releases/download/v0.1.1/speexdsp_ns-0.1.2-cp{py_version}-cp{py_version}-linux_x86_64.whl",
         ]
     elif platform.system() == "Linux" and platform.machine() == "aarch64":
-        install_requires=[
-            'onnxruntime>=1.10.0,<2',
+        additional_requires=[
             f"speexdsp_ns @ https://github.com/dscripka/openWakeWord/releases/download/v0.1.1/speexdsp_ns-0.1.2-cp{py_version}-cp{py_version}-linux_aarch64.whl",
         ],
     elif platform.system() == "Windows" and platform.machine() == "x86_64":
-        install_requires=[
-            'onnxruntime>=1.10.0,<2',
+        additional_requires=[
+            'PyAudioWPatch'
         ]
     else:
-        install_requires = ['onnxruntime>=1.10.0,<2']
+        additional_requires = []
 
-    return install_requires
+    return additional_requires
 
 setuptools.setup(
     name="openwakeword",
-    version="0.1.0",
-    install_requires=build_install_requires(),
+    version="0.2.0",
+    install_requires=['onnxruntime>=1.10.0,<2'],
     extras_require={
         'test': [
                     'pytest>=7.2.0,<8',
@@ -37,7 +35,7 @@ setuptools.setup(
                     'pytest-flake8>=1.1.1,<2',
                     'flake8>=4.0,<4.1',
                     'pytest-mypy>=0.10.0,<1'
-                ],
+                ] + build_additional_requires(),
         'full': [
                     'mutagen>=1.46.0,<2',
                     'speechbrain>=0.5.13,<1',
@@ -47,7 +45,7 @@ setuptools.setup(
                     'pytest-mypy>=0.10.0,<1',
                     'plotext>=5.2.7,<6',
                     'sounddevice>=0.4.1,<1'
-                ]
+                ] + build_additional_requires()
     },
     author="David Scripka",
     author_email="david.scripka@gmail.com",
@@ -65,5 +63,5 @@ setuptools.setup(
     ],
     packages=setuptools.find_packages(),
     include_package_data=True,
-    python_requires=">=3.6",
+    python_requires=">=3.7",
 )
