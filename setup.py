@@ -35,7 +35,7 @@ setuptools.setup(
                     'pytest-flake8>=1.1.1,<2',
                     'flake8>=4.0,<4.1',
                     'pytest-mypy>=0.10.0,<1'
-                ] + build_additional_requires(),
+                ],
         'full': [
                     'mutagen>=1.46.0,<2',
                     'speechbrain>=0.5.13,<1',
@@ -45,7 +45,7 @@ setuptools.setup(
                     'pytest-mypy>=0.10.0,<1',
                     'plotext>=5.2.7,<6',
                     'sounddevice>=0.4.1,<1'
-                ] + build_additional_requires()
+                ]
     },
     author="David Scripka",
     author_email="david.scripka@gmail.com",
