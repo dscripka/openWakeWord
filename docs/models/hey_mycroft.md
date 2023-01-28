@@ -4,6 +4,37 @@ A model trained to detect the presence of the phrase "hey mycroft" in an audio r
 
 Other similar phrases such as just "mycroft" or may also work, but likely with higher false-reject rates. Similarly, a short pause after the speaking the wakeword is recommended, but the model may also detect the presence of the wakeword is a continuous stream of speech in certain cases.
 
+# Model Architecture
+
+The model is a simple 3-layer full-connected network, that takes the flattened input features from the frozen audio embedding mode. ReLU activations and layer norms are inserted between the layers. A representive (but not exact) example of this structure is shown below.
+
+```
+==========================================================================================
+Layer (type:depth-idx)                   Output Shape              Param #
+==========================================================================================
+Sequential                               [1, 1]                    --
+├─Flatten: 1-1                           [1, 1536]                 --
+├─Linear: 1-2                            [1, 64]                   98,368
+├─LayerNorm: 1-3                         [1, 64]                   128
+├─ReLU: 1-4                              [1, 64]                   --
+├─Linear: 1-5                            [1, 64]                   4,160
+├─LayerNorm: 1-6                         [1, 64]                   128
+├─ReLU: 1-7                              [1, 64]                   --
+├─Linear: 1-8                            [1, 1]                    65
+├─Sigmoid: 1-9                           [1, 1]                    --
+==========================================================================================
+Total params: 102,849
+Trainable params: 102,849
+Non-trainable params: 0
+Total mult-adds (M): 0.10
+==========================================================================================
+Input size (MB): 0.01
+Forward/backward pass size (MB): 0.00
+Params size (MB): 0.41
+Estimated Total Size (MB): 0.42
+==========================================================================================
+```
+
 # Training Data
 
 ## Positive Data

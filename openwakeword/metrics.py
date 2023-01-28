@@ -40,7 +40,7 @@ def get_false_positives(scores: List, threshold: float, grouping_window: int = 5
     n = grouping_window
     for t in transitions:
         if bin_pred[t.end()] != 0:
-            bin_pred[t.end():t.end() + n] = [0]*n
+            bin_pred[t.end():t.end() + min(len(transitions) - t.end(), n)] = [0]*min(len(transitions) - t.end(), n)
 
     return sum(bin_pred)
 

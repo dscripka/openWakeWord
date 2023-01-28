@@ -40,6 +40,10 @@ frame = my_function_to_get_audio_frame()
 prediction = model.predict(frame)
 ```
 
+## Reccomended Settings
+
+While the default settings for openWakeWord will work well in many cases, there are adjustable parameters that can improve performance in some cases. On supported platforms (currently only X86 and Arm64 linux), Speex noise suppression can be enabled by setting the `enable_speex_noise_suppression=True` when instantiating an openWakeWord model. This can improve performance when relatively constant background noise is present. Second, a voice activity deteciton (VAD) model from [Silero](https://github.com/snakers4/silero-vad) is included with openWakeWord, and can be enabled by setting the `vad_threshold` argument to a value between 0 and 1 when instantiating an openWakeWord model. This will only allow a positive prediction from openWakeWord when the VAD model simultaneously has a score above the specified threshold, which can significantly reduce false-positive activations in the present of non-speech noise. Finally, all of the included openWakeWord models were trained to work well with a default threshold of `0.5` for a positive prediction, but you are encouraged to determine the best threshold for your environment and use-case through testing.
+
 # Project Goals
 
 openWakeWord has four high-level goals, which combine to (hopefully!) produce a framework that is simple to use *and* extend.
@@ -64,6 +68,7 @@ The table below lists each model, examples of the word/phrases it is trained to 
 | ------------- | ------------- | ------------- |
 | alexa | "alexa"| [docs](docs/models/alexa.md) |
 | hey mycroft | "hey mycroft" | [docs](docs/models/hey_mycroft.md) |
+| hey jarvis | "hey jarvis" | [docs](docs/models/hey_jarvis.md) |
 | current weather | "what's the weather" | [docs](docs/models/weather.md) |
 | timers | "set a 10 minute timer" | [docs](docs/models/timers.md) |
 
@@ -157,4 +162,4 @@ Future release roadmaps may have non-english support. In particular, [Mycroft.AI
 
 # License
 
-All of the code in openWakeWord is licensed under the **Apache 2.0** license. All of the included pre-trained models are licensed under the [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-nc-sa/4.0/) license due to the inclusion of datasets with unknown or restrictive licensing as part of the training data. If you are interested in pre-trained models with more permissive licensing, please raise in issue and we will try to add them to a future release.
+All of the code in openWakeWord is licensed under the **Apache 2.0** license. All of the included pre-trained models are licensed under the [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-nc-sa/4.0/) license due to the inclusion of datasets with unknown or restrictive licensing as part of the training data. If you are interested in pre-trained models with more permissive licensing, please raise an issue and we will try to add them to a future release.

@@ -4,6 +4,35 @@ A model trained to detect the presence of several different phrases all related 
 
 As with other models, similar phrases beyond those included in the training data may also work, but likely with higher false-reject rates. Similarly, a short pause after the speaking the wake phrase is recommended, but the model may also detect the presence of the wake phrase is a continuous stream of speech in certain cases.
 
+# Model Architecture
+
+The model is a simple 3-layer full-connected network, that takes the flattened input features from the frozen audio embedding mode. As this model is multi-class, the final layer has the number of nodes equal to the number of classes. A softmax layer is added prior to saving the model to return scores that sum to one across the classes. A representive (but not exact) example of this structure is shown below.
+
+```
+==========================================================================================
+Layer (type:depth-idx)                   Output Shape              Param #
+==========================================================================================
+Sequential                               [1, 7]                    --
+├─Flatten: 1-1                           [1, 3264]                 --
+├─Linear: 1-2                            [1, 128]                  417,920
+├─ReLU: 1-3                              [1, 128]                  --
+├─Linear: 1-4                            [1, 128]                  16,512
+├─ReLU: 1-5                              [1, 128]                  --
+├─Linear: 1-6                            [1, 7]                    903
+├─ReLU: 1-7                              [1, 7]                    --
+==========================================================================================
+Total params: 435,335
+Trainable params: 435,335
+Non-trainable params: 0
+Total mult-adds (M): 0.44
+==========================================================================================
+Input size (MB): 0.01
+Forward/backward pass size (MB): 0.00
+Params size (MB): 1.74
+Estimated Total Size (MB): 1.76
+==========================================================================================
+```
+
 # Training Data
 
 ## Positive Data

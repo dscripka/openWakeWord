@@ -215,11 +215,12 @@ class Model():
             if timing:
                 timing_dict["models"]["vad"] = time.time() - vad_start
 
-            # Get frames from last 0.4 to 0.56 seconds (3 frames) and get max VAD score
+            # Get frames from last 0.4 to 0.56 seconds (3 frames) before the current
+            # frame and get max VAD score
             vad_frames = list(self.vad.prediction_buffer)[-7:-4]
-            vad_avg_score = np.max(vad_frames) if len(vad_frames) > 0 else 0
+            vad_max_score = np.max(vad_frames) if len(vad_frames) > 0 else 0
             for mdl in predictions.keys():
-                if vad_avg_score < self.vad_threshold:
+                if vad_max_score < self.vad_threshold:
                     predictions[mdl] = 0.0
 
         if timing:

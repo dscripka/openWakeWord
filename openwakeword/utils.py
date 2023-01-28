@@ -328,7 +328,7 @@ def bulk_predict(
         prediction_function (str): The name of the method used to predict on the input audio files
                                    (default is the `predict_clip` method)
         ncpu (int): How many processes to create (up to max of available CPUs)
-        kwargs (dict): Any other keyword arguments to pass to the model prediction function (`predict_clip`)
+        kwargs (dict): Any other keyword arguments to pass to the model initialization
 
     Returns:
         dict: A dictionary containing the predictions for each file, with the filepath as the key
@@ -348,13 +348,14 @@ def bulk_predict(
     for chunk in chunks:
         oww = openwakeword.Model(
             wakeword_model_paths=wakeword_model_paths,
+            **kwargs
         )
         mdls.append(oww)
 
         def f(clips):
             results = []
             for clip in clips:
-                results.append({clip: getattr(mdls[-1], prediction_function)(clip, **kwargs)})
+                results.append({clip: getattr(mdls[-1], prediction_function)(clip)})
             q.put(results)
 
         ps.append(Process(target=f, args=(chunk,)))
