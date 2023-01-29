@@ -34,6 +34,7 @@ from openwakeword.model import Model
 import scipy.io.wavfile
 import datetime
 import argparse
+from utils.beep import playBeep
 
 # Parse input arguments
 parser=argparse.ArgumentParser()
@@ -116,6 +117,7 @@ if __name__ == "__main__":
                 last_save = time.time()
                 activation_times[mdl] = []
                 detect_time = datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+                
                 print(f'Detected activation from \"{mdl}\" model at time {detect_time}!')
 
                 # Capture total of 5 seconds, with the audio associated with the
@@ -123,3 +125,5 @@ if __name__ == "__main__":
                 audio_context = np.array(list(owwModel.preprocessor.raw_data_buffer)[-16000*5:]).astype(np.int16)
                 fname = detect_time + f"_{mdl}.wav"
                 scipy.io.wavfile.write(os.path.join(os.path.abspath(args.output_dir), fname), 16000, audio_context)
+                
+                playBeep('audio/activation.wav')
