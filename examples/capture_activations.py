@@ -31,6 +31,7 @@ else:
     import pyaudio
 import numpy as np
 from openwakeword.model import Model
+import openwakeword
 import scipy.io.wavfile
 import datetime
 import argparse
@@ -67,6 +68,14 @@ parser.add_argument(
     default=False,
     required=False
 )
+
+parser.add_argument(
+    "--model",
+    help="The model to use for openWakeWord, leave blank to use all available models",
+    type=str,
+    required=False
+)
+
 args=parser.parse_args()
 
 # Get microphone stream
@@ -78,10 +87,26 @@ audio = pyaudio.PyAudio()
 mic_stream = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
 
 # Load pre-trained openwakeword models
-owwModel = Model(
-    enable_speex_noise_suppression=args.noise_suppression,
-    vad_threshold = args.vad_threshold
-)
+if args.model:
+    model_paths = openwakeword.get_pretrained_model_paths()
+    for path in model_paths:
+        if args.model in path:
+            model_path = path
+            
+    if model_path:
+        owwModel = Model(
+            wakeword_model_paths=[model_path],
+            enable_speex_noise_suppression=args.noise_suppression,
+            vad_threshold = args.vad_threshold
+            )
+    else: 
+        print(f'Could not find model \"{args.model}\"')
+        exit()
+else:
+    owwModel = Model(
+        enable_speex_noise_suppression=args.noise_suppression,
+        vad_threshold=args.vad_threshold
+    )
 
 # Set waiting period after activation before saving clip (to get some audio context after the activation)
 save_delay = 1  # seconds
@@ -102,10 +127,10 @@ if __name__ == "__main__":
     print("\n\nListening for wakewords...\n")
     while True:
         # Get audio
-        audio = np.frombuffer(mic_stream.read(CHUNK), dtype=np.int16)
+        mic_audio = np.frombuffer(mic_stream.read(CHUNK), dtype=np.int16)
 
         # Feed to openWakeWord model
-        prediction = owwModel.predict(audio)
+        prediction = owwModel.predict(mic_audio)
 
         # Check for model activations (score above threshold), and save clips
         for mdl in prediction.keys():
@@ -120,10 +145,10 @@ if __name__ == "__main__":
                 
                 print(f'Detected activation from \"{mdl}\" model at time {detect_time}!')
 
-                # Capture total of 5 seconds, with the audio associated with the
+                # Capture total of 5 seconds, with the mic_ associated with the
                 # activation around the ~4 second point
                 audio_context = np.array(list(owwModel.preprocessor.raw_data_buffer)[-16000*5:]).astype(np.int16)
                 fname = detect_time + f"_{mdl}.wav"
                 scipy.io.wavfile.write(os.path.join(os.path.abspath(args.output_dir), fname), 16000, audio_context)
                 
-                playBeep('audio/activation.wav')
+                playBeep('audio/activation.wav', audio)
