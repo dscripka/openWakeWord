@@ -26,7 +26,7 @@ pip install pyaudio scipy
 pip install PyAudioWPatch scipy
 ```
 
-2) Run the script: `python capture_activations.py --threshold 0.5 --output_dir <my_dir>`
+2) Run the script: `python capture_activations.py --threshold 0.5 --output_dir <my_dir> --model <my_model>`
 
 Note that if you have more than one microphone connected to your system, you may need to adjust the PyAudio configuration in the script to select the appropriate input device.
 
