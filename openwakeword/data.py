@@ -301,6 +301,7 @@ def mix_clips_batch(
         volume_augmentation: bool = True,
         generated_noise_augmentation: float = 0.0,
         shuffle: bool = True,
+        return_sequence_labels: bool = False,
         return_background_clips: bool = False,
         return_background_clips_delay: Tuple[int, int] = (0, 0),
         seed: int = 0
@@ -350,6 +351,8 @@ def mix_clips_batch(
                                            in audio devices, which means that the mixed audio is never
                                            exactly aligned with the two source clips.
         shuffle (bool): Whether to shuffle the foreground clips before mixing (default: True)
+        return_sequence_labels (bool): Whether to return sequence labels (i.e., frame-level labels) for each clip
+                                       based on the start/end positions of the foreground clip.
         seed (int): A random seed
 
     Returns:
@@ -412,11 +415,13 @@ def mix_clips_batch(
         # Mix clips at snr levels
         snrs_db = np.random.uniform(snr_low, snr_high, batch_size)
         mixed_clips = []
+        sequence_labels = []
         for fg, bg, snr, start in zip(foreground_clips_batch, background_clips_batch,
                                       snrs_db, start_index_batch):
             if bg.shape[0] != combined_size:
                 raise ValueError(bg.shape)
             mixed_clip = mix_clip(fg, bg, snr, start)
+            sequence_labels.append(get_frame_labels(combined_size, start, start+fg.shape[0]))
 
             if np.random.random() < generated_noise_augmentation:
                 noise_color = ["white", "pink", "blue", "brown", "violet"]
@@ -427,6 +432,7 @@ def mix_clips_batch(
             mixed_clips.append(mixed_clip)
 
         mixed_clips_batch = torch.vstack(mixed_clips)
+        sequence_labels_batch = torch.from_numpy(np.vstack(sequence_labels))
 
         # Apply reverberation to the batch (from a single RIR file)
         if rirs:
@@ -454,13 +460,26 @@ def mix_clips_batch(
         error_index = np.where(mixed_clips_batch.max(axis=1) != 0)[0]
         mixed_clips_batch = mixed_clips_batch[error_index]
         labels_batch = labels_batch[error_index]
+        sequence_labels_batch = sequence_labels_batch[error_index]
 
         if not return_background_clips:
-            yield mixed_clips_batch, labels_batch, None
+            yield mixed_clips_batch, labels_batch if not return_sequence_labels else sequence_labels_batch, None
         else:
             background_clips_batch_delayed = (torch.vstack(background_clips_batch_delayed).numpy()
                                               * 32767).astype(np.int16)[error_index]
-            yield mixed_clips_batch, labels_batch, background_clips_batch_delayed
+            yield (mixed_clips_batch,
+                   labels_batch if not return_sequence_labels else sequence_labels_batch,
+                   background_clips_batch_delayed)
+
+
+def get_frame_labels(combined_size, start, end, buffer=1):
+    sequence_label = np.zeros(np.ceil((combined_size-12400)/1280).astype(int))
+    frame_positions = np.arange(12400, combined_size, 1280)
+    start_frame = np.argmin(abs(frame_positions - start))
+    end_frame = np.argmin(abs(frame_positions - end))
+    sequence_label[start_frame:start_frame+2] = 1
+    sequence_label[end_frame-1:end_frame+1] = 1
+    return sequence_label
 
 
 def mix_clip(fg, bg, snr, start):
@@ -540,6 +559,7 @@ class mmap_batch_generator:
     """
     def __init__(self,
                  data_files: dict,
+                 label_files: dict = {},
                  batch_size: int = 128,
                  n_per_class: dict = {},
                  data_transform_funcs: dict = {},
@@ -551,6 +571,9 @@ class mmap_batch_generator:
         Args:
             data_files (dict): A dictionary of labels (as keys) and on-disk numpy array paths (as values).
                                Keys should be integer strings representing class labels.
+            label_files (dict): A dictionary where the keys are the class labels and the values are the per-example
+                                labels. The values must be the same shape as the correponding numpy data arrays
+                                from the `data_files` argument.
             batch_size (int): The number of samples per batch
             n_per_class (dict): A dictionary with integer string labels (as keys) and number of example per batch
                                (as values). If None (the default), batch sizes for each class will be
@@ -575,12 +598,14 @@ class mmap_batch_generator:
         """
         # inputs
         self.data_files = data_files
+        self.label_files = label_files
         self.n_per_class = n_per_class
         self.data_transform_funcs = data_transform_funcs
         self.label_transform_funcs = label_transform_funcs
 
         # Get array mmaps and store their shapes (but load files < 1 GB total size into memory)
         self.data = {label: np.load(fl, mmap_mode='r') for label, fl in data_files.items()}
+        self.labels = {label: np.load(fl) for label, fl in label_files.items()}
         self.data_counter = {label: 0 for label in data_files.keys()}
         self.original_shapes = {label: self.data[label].shape for label in self.data.keys()}
         self.shapes = {label: self.data[label].shape for label in self.data.keys()}
@@ -631,7 +656,10 @@ class mmap_batch_generator:
                     x = self.data_transform_funcs[label](x)
 
                 # Make labels for data (following whatever the current shape of `x` is)
-                y_batch = [label]*x.shape[0]
+                if self.label_files.get(label, None):
+                    y_batch = self.labels[label][self.data_counter[label]:self.data_counter[label]+n]
+                else:
+                    y_batch = [label]*x.shape[0]
 
                 # Transform labels
                 if self.label_transform_funcs and self.label_transform_funcs.get(label):
