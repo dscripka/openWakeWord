@@ -346,16 +346,21 @@ def bulk_predict(
     mdls = []
     q: Queue = Queue()
     for chunk in chunks:
+        filtered_kwargs = {key: value for key, value in kwargs.items()
+                           if key in openwakeword.Model.__init__.__code__.co_varnames}
         oww = openwakeword.Model(
             wakeword_model_paths=wakeword_model_paths,
-            **kwargs
+            **filtered_kwargs
         )
         mdls.append(oww)
 
         def f(clips):
             results = []
             for clip in clips:
-                results.append({clip: getattr(mdls[-1], prediction_function)(clip)})
+                func = getattr(mdls[-1], prediction_function)
+                filtered_kwargs = {key: value for key, value in kwargs.items()
+                                   if key in func.__code__.co_varnames}
+                results.append({clip: func(clip, **filtered_kwargs)})
             q.put(results)
 
         ps.append(Process(target=f, args=(chunk,)))

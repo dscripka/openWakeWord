@@ -267,16 +267,25 @@ class Model():
 
         return predictions
 
-    def _get_positive_prediction_frames(self, file: str, threshold: float = 0.5, **kwargs):
+    def _get_positive_prediction_frames(
+            self,
+            file: str,
+            threshold: float = 0.5,
+            return_type: str = "features",
+            **kwargs
+            ):
         """
         Gets predictions for the input audio data, and returns the audio features (embeddings)
-        for all of the frames with a score above the `threshold` argument. Can be a useful
-        way to collect false-positive predictions.
+        or audio data for all of the frames with a score above the `threshold` argument.
+        Can be a useful way to collect false-positive predictions.
 
         Args:
             file (str): The path to a 16-bit 16khz WAV audio file to process
             threshold (float): The minimum score required for a frame of audio features
                                to be returned.
+            return_type (str): The type of data to return when a positive prediction is
+                               detected. Can be either 'features' or 'audio' to return
+                               audio embeddings or raw audio data, respectively.
             kwargs: Any keyword arguments to pass to the class `predict` method
 
         Returns:
@@ -290,7 +299,7 @@ class Model():
             data = np.frombuffer(f.readframes(f.getnframes()), dtype=np.int16)
 
         # Iterate through clip, getting predictions
-        positive_features = defaultdict(list)
+        positive_data = defaultdict(list)
         step_size = 1280
         for i in range(0, data.shape[0]-step_size, step_size):
             predictions = self.predict(data[i:i+step_size], **kwargs)
@@ -298,13 +307,18 @@ class Model():
                 if predictions[lbl] >= threshold:
                     mdl = self.get_parent_model_from_label(lbl)
                     features = self.preprocessor.get_features(self.model_inputs[mdl])
-                    positive_features[lbl].append(features)
+                    if return_type == 'features':
+                        positive_data[lbl].append(features)
+                    if return_type == 'audio':
+                        context = data[max(0, i - 16000*3):i + 16000]
+                        if len(context) == 16000*4:
+                            positive_data[lbl].append(context)
 
-        positive_features_combined = {}
-        for lbl in positive_features.keys():
-            positive_features_combined[lbl] = np.vstack(positive_features[lbl])
+        positive_data_combined = {}
+        for lbl in positive_data.keys():
+            positive_data_combined[lbl] = np.vstack(positive_data[lbl])
 
-        return positive_features_combined
+        return positive_data_combined
 
     def _suppress_noise_with_speex(self, x: np.ndarray, frame_size: int = 160):
         """
