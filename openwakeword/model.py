@@ -20,6 +20,7 @@ from openwakeword.utils import AudioFeatures
 
 import wave
 import os
+import pickle
 from collections import deque, defaultdict
 from functools import partial
 import time
@@ -38,6 +39,8 @@ class Model():
             class_mapping_dicts: List[dict] = [],
             enable_speex_noise_suppression: bool = False,
             vad_threshold: float = 0,
+            custom_verifier_models: Union[bool, dict] = False,
+            custom_verifier_threshold: float = 0.1,
             **kwargs
             ):
         """Initialize the openWakeWord model object.
@@ -59,6 +62,13 @@ class Model():
                                    For every input audio frame, a VAD score is obtained and only those model predictions
                                    with VAD scores above the threshold will be returned. The default value (0),
                                    disables voice activity detection entirely.
+            custom_verifier_models (dict): A dictionary of paths to custom verifier models, where 
+                                           the keys are the model names (corresponding to the openwakeword.models attribute)
+                                           and the values are the filepaths of the custom verifier models.
+            custom_verifier_threshold (float): The score threshold to use a custom verifier model. If the score from a model for
+                                               a given frame is greater than this value, the associated custom verifier model will
+                                               also predict on that frame, and the verifier score will be returned.
+            kwargs (dict): Any other keyword arguments to pass the the preprocessor instance
         """
 
         # Initialize the ONNX models and store them
@@ -73,13 +83,16 @@ class Model():
         else:
             wakeword_model_names = [os.path.basename(i[0:-5]) for i in wakeword_model_paths]
 
-        # Create attributes to store models and metadat
+        # Create attributes to store models and metadata
         self.models = {}
         self.model_inputs = {}
         self.model_outputs = {}
         self.class_mapping = {}
         self.model_input_names = {}
+        self.custom_verifier_models = {}
+        self.custom_verifier_threshold = custom_verifier_threshold
         for mdl_path, mdl_name in zip(wakeword_model_paths, wakeword_model_names):
+            # Load openwakeword models
             self.models[mdl_name] = ort.InferenceSession(mdl_path, sess_options=sessionOptions,
                                                          providers=["CPUExecutionProvider"])
             self.model_inputs[mdl_name] = self.models[mdl_name].get_inputs()[0].shape[1]
@@ -91,6 +104,11 @@ class Model():
             else:
                 self.class_mapping[mdl_name] = {str(i): str(i) for i in range(0, self.model_outputs[mdl_name])}
             self.model_input_names[mdl_name] = self.models[mdl_name].get_inputs()[0].name
+
+            # Load custom verifier models
+            if isinstance(custom_verifier_models, dict):
+                if custom_verifier_models.get(mdl_name, False):
+                    self.custom_verifier_models[mdl_name] = pickle.load(open(custom_verifier_models[mdl_name], 'rb'))
 
         # Create buffer to store frame predictions
         self.prediction_buffer: DefaultDict[str, deque] = defaultdict(partial(deque, maxlen=30))
@@ -183,6 +201,16 @@ class Model():
                 for int_label, cls in self.class_mapping[mdl].items():
                     predictions[cls] = prediction[0][0][int(int_label)]
 
+            # Update scores based on custom verifier model
+            if self.custom_verifier_models != {}:
+                for cls in predictions.keys():
+                    if predictions[cls] >= self.custom_verifier_threshold:
+                        parent_model = self.get_parent_model_from_label(cls)
+                        verifier_prediction = self.custom_verifier_models[parent_model].predict_proba(
+                            self.preprocessor.get_features(self.model_inputs[mdl])
+                        )[0][-1]
+                        predictions[cls] = verifier_prediction
+            
             # Update prediction buffer, and zero predictions for first 5 frames during model initialization
             for cls in predictions.keys():
                 if len(self.prediction_buffer[cls]) < 5:
