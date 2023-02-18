@@ -46,9 +46,23 @@ frame = my_function_to_get_audio_frame()
 prediction = model.predict(frame)
 ```
 
-## Reccomended Settings
+# Reccomendations for Usage
 
-While the default settings for openWakeWord will work well in many cases, there are adjustable parameters that can improve performance in some cases. On supported platforms (currently only X86 and Arm64 linux), Speex noise suppression can be enabled by setting the `enable_speex_noise_suppression=True` when instantiating an openWakeWord model. This can improve performance when relatively constant background noise is present. Second, a voice activity deteciton (VAD) model from [Silero](https://github.com/snakers4/silero-vad) is included with openWakeWord, and can be enabled by setting the `vad_threshold` argument to a value between 0 and 1 when instantiating an openWakeWord model. This will only allow a positive prediction from openWakeWord when the VAD model simultaneously has a score above the specified threshold, which can significantly reduce false-positive activations in the present of non-speech noise. Finally, all of the included openWakeWord models were trained to work well with a default threshold of `0.5` for a positive prediction, but you are encouraged to determine the best threshold for your environment and use-case through testing.
+## Noise Suppresion and Voice Activity Detection (VAD)
+
+While the default settings for openWakeWord will work well in many cases, there are adjustable parameters in openWakeWord that can improve performance in some deployment scenarios.
+
+On supported platforms (currently only X86 and Arm64 linux), Speex noise suppression can be enabled by setting the `enable_speex_noise_suppression=True` when instantiating an openWakeWord model. This can improve performance when relatively constant background noise is present.
+
+Second, a voice activity deteciton (VAD) model from [Silero](https://github.com/snakers4/silero-vad) is included with openWakeWord, and can be enabled by setting the `vad_threshold` argument to a value between 0 and 1 when instantiating an openWakeWord model. This will only allow a positive prediction from openWakeWord when the VAD model simultaneously has a score above the specified threshold, which can significantly reduce false-positive activations in the present of non-speech noise.
+
+## Threshold Scores for Activation
+
+All of the included openWakeWord models were trained to work well with a default threshold of `0.5` for a positive prediction, but you are encouraged to determine the best threshold for your environment and use-case through testing. For certain deployments, using a lower or higher threshold in practice may result in significantly better performance.
+
+## User-specific models
+
+If the baseline performance of openWakeWord models is not sufficent for a given application (specifically, if the false activation rate is unacceptably high), it is possible to train [custom verifier models](docs/custom_verifier_models.md) for specific voices that act as a second-stage filter on predictions (i.e., only allow activations through that were likely spoken by a known set of voices). This can greatly improve performance, at the cost of making the openWakeWord system less likely to respond to voices new voices.
 
 # Project Goals
 

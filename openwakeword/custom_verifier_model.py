@@ -25,8 +25,8 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import FunctionTransformer, StandardScaler
 
-# Define functions to prepare data for speaker dependent verifier model
 
+# Define functions to prepare data for speaker dependent verifier model
 def get_reference_clip_features(
         reference_clip: str,
         oww_model: openwakeword.Model,
@@ -34,11 +34,11 @@ def get_reference_clip_features(
         threshold: float = 0.5,
         N: int = 3,
         **kwargs
-    ):
+        ):
     """
     Processes input audio files (16-bit, 16-khz single-channel WAV files) and gets the openWakeWord
     audio features that produce a prediction from the specified model greater than the threshold value.
-    
+
 
     Args:
         reference_clip (str): The target audio file to get features from
@@ -56,7 +56,7 @@ def get_reference_clip_features(
 
     # Create dictionary to store frames
     positive_data = collections.defaultdict(list)
-    
+
     # Get predictions
     for _ in range(N):
         # Load clip
@@ -64,26 +64,31 @@ def get_reference_clip_features(
             sr, dat = scipy.io.wavfile.read(reference_clip)
         else:
             dat = reference_clip
-        
+
         # Set random starting point to get small variations in features
         if N != 1:
-            dat = dat[np.random.randint(0,1280):]
-        
+            dat = dat[np.random.randint(0, 1280):]
+
         # Get predictions
         step_size = 1280
         for i in range(0, dat.shape[0]-step_size, step_size):
             predictions = oww_model.predict(dat[i:i+step_size], **kwargs)
             if predictions[model_name] >= threshold:
-                features = oww_model.preprocessor.get_features(oww_model.model_inputs[model_name])
+                features = oww_model.preprocessor.get_features(  # type: ignore[has-type]
+                    oww_model.model_inputs[model_name]           # type: ignore[has-type]
+                )
                 positive_data[model_name].append(features)
 
     if len(positive_data[model_name]) == 0:
-        positive_data[model_name].append(np.empty((0, oww_model.model_inputs[model_name], 96)))
-                
+        positive_data[model_name].append(
+            np.empty((0, oww_model.model_inputs[model_name], 96)))  # type: ignore[has-type]
+
     return np.vstack(positive_data[model_name])
+
 
 def flatten_features(x):
     return [i.flatten() for i in x]
+
 
 def train_verifier_model(features: np.ndarray, labels: np.ndarray):
     """
@@ -104,6 +109,7 @@ def train_verifier_model(features: np.ndarray, labels: np.ndarray):
     pipeline.fit(features, labels)
 
     return pipeline
+
 
 def train_custom_verifier(
         positive_reference_clips: str,
@@ -136,27 +142,27 @@ def train_custom_verifier(
             wakeword_model_paths=[model_name],
             **kwargs
         )
-        model_name = model_name[0:-5]
+        model_name = model_name.split(os.path.sep)[-1][0:-5]
     else:
         oww = openwakeword.Model(**kwargs)
 
     # Get features from positive reference clips
     positive_features = np.vstack(
-        [get_reference_clip_features(i, oww, model_name, N=5) 
+        [get_reference_clip_features(i, oww, model_name, N=5)
          for i in tqdm(positive_reference_clips, desc="Processing positive reference clips")]
     )
 
     # Get features from negative reference clips
     negative_features = np.vstack(
-        [get_reference_clip_features(i, oww, model_name, threshold=0.0, N=1) 
+        [get_reference_clip_features(i, oww, model_name, threshold=0.0, N=1)
          for i in tqdm(negative_reference_clips, desc="Processing negative reference clips")]
     )
-    
+
     # Train logistic regression model on reference clip features
     print("Training and saving verifier model...")
     lr_model = train_verifier_model(
         np.vstack((positive_features, negative_features)),
-        [1]*positive_features.shape[0] + [0]*negative_features.shape[0]
+        np.array([1]*positive_features.shape[0] + [0]*negative_features.shape[0])
     )
 
     # Save logistic regression model to specified output location

@@ -62,12 +62,14 @@ class Model():
                                    For every input audio frame, a VAD score is obtained and only those model predictions
                                    with VAD scores above the threshold will be returned. The default value (0),
                                    disables voice activity detection entirely.
-            custom_verifier_models (dict): A dictionary of paths to custom verifier models, where 
-                                           the keys are the model names (corresponding to the openwakeword.models attribute)
-                                           and the values are the filepaths of the custom verifier models.
-            custom_verifier_threshold (float): The score threshold to use a custom verifier model. If the score from a model for
-                                               a given frame is greater than this value, the associated custom verifier model will
-                                               also predict on that frame, and the verifier score will be returned.
+            custom_verifier_models (dict): A dictionary of paths to custom verifier models, where
+                                           the keys are the model names (corresponding to the openwakeword.models
+                                           attribute) and the values are the filepaths of the
+                                           custom verifier models.
+            custom_verifier_threshold (float): The score threshold to use a custom verifier model. If the score
+                                               from a model for a given frame is greater than this value, the
+                                               associated custom verifier model will also predict on that frame, and
+                                               the verifier score will be returned.
             kwargs (dict): Any other keyword arguments to pass the the preprocessor instance
         """
 
@@ -210,7 +212,7 @@ class Model():
                             self.preprocessor.get_features(self.model_inputs[mdl])
                         )[0][-1]
                         predictions[cls] = verifier_prediction
-            
+
             # Update prediction buffer, and zero predictions for first 5 frames during model initialization
             for cls in predictions.keys():
                 if len(self.prediction_buffer[cls]) < 5:
