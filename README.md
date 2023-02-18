@@ -168,9 +168,11 @@ While the models are trained with background noise to increase robustness, in so
 
 # Training New Models
 
-Training new models is conceptually simple and requires just a few steps:
+Training new models is conceptually simple, and the entire process is demonstrated in a [tutorial notebook](notebooks/training_models.ipynb).
 
-1) Generate new training data for the desired wakeword/phrase using open-source speech-to-text systems (see [Synthetic Data Generation](docs/synthetic_data_generation.md) for more details). These models and the generation code will provided in a forthcoming separate repository. The number of generated examples required can vary, a minimum of several thousand is recommended and performance seems to increase smoothly with increasing dataset size.
+Fundamentally, a new model requires o data generation and collection steps:
+
+1) Generate new training data for the desired wakeword/phrase using open-source speech-to-text systems (see [Synthetic Data Generation](docs/synthetic_data_generation.md) for more details). These models and the generation code are hosted in a separate [repository](https://github.com/dscripka/synthetic_speech_dataset_generation). The number of generated examples required can vary, a minimum of several thousand is recommended and performance seems to increase smoothly with increasing dataset size.
 
 2) Collect negative data (e.g., audio where the wakeword/phrase is not present) to help the model have a low false-accept rate. This also benefits from scale, and the [included models](#pre-trained-models) were all trained with ~30,000 hours of negative data representing speech, noise, and music. See the individual model documentation pages for more details on training data curation and preparation.
 
