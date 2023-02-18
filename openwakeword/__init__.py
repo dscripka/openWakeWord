@@ -1,8 +1,9 @@
 import os
 from openwakeword.model import Model
 from openwakeword.vad import VAD
+from openwakeword.custom_verifier_model import train_custom_verifier
 
-__all__ = ['Model', 'VAD']
+__all__ = ['Model', 'VAD', 'train_custom_verifier']
 
 models = {
     "alexa": {
