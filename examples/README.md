@@ -14,7 +14,7 @@ Note that if you have more than one microphone connected to your system, you may
 
 ## Capture Activations
 
-This script is designed to run silently in the background and capture activations for the included pre-trained models. You can specify the initialization arguments, activation threshold, and output directory for the saved audio files for each activation. To run the script, follow these steps:
+This script is designed to run in the background and capture activations for the included pre-trained models. You can specify the initialization arguments, activation threshold, and output directory for the saved audio files for each activation. To run the script, follow these steps:
 
 1) Install the example-specific requirements:
 
@@ -29,7 +29,7 @@ pip install PyAudioWPatch scipy
 2) Run the script: `python capture_activations.py --threshold 0.5 --output_dir <my_dir> --model <my_model>`
 
 Where `--output_dir` is the desired location to save the activation clips, and `--model` is the model name or full path of the model to use.
-If `--model` is not provided, all of the default models will be loaded.
+If `--model` is not provided, all of the default models will be loaded. Use `python capture_activations.py --help` for more information on all of the possible arguments.
 
 Note that if you have more than one microphone connected to your system, you may need to adjust the PyAudio configuration in the script to select the appropriate input device.
 
