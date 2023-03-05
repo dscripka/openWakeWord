@@ -1,6 +1,8 @@
 name: Publish Python distributions to PyPI
 
-on: push
+on: 
+  push:
+  workflow_dispatch:
 
 jobs:
   build-n-publish:
