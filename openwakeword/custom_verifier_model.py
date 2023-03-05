@@ -151,6 +151,10 @@ def train_custom_verifier(
         [get_reference_clip_features(i, oww, model_name, N=5)
          for i in tqdm(positive_reference_clips, desc="Processing positive reference clips")]
     )
+    if positive_features.shape[0] == 0:
+        raise ValueError("The positive features were created! Make sure that"
+                         " the positive reference clips contain the appropriate audio"
+                         " for the desired model")
 
     # Get features from negative reference clips
     negative_features = np.vstack(
