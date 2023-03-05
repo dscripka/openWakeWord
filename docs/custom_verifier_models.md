@@ -1,6 +1,6 @@
 # Custom Verifier Models
 
-If the performance of a trained openWakeWord model is not sufficient in a production application, training a custom verifier model on a particular speaker or set of speakers can help significantly the performance of the system. A custom verify model acts as a filter on top of the base openWakeWord model, determining whether a given activation was likely from a known target speaker. In particular, this can be a very effective way at reducing false activiations, as the model will be more focused on a the target speaker instead of attempting to activate for any speaker.
+If the performance of a trained openWakeWord model is not sufficient in a production application, training a custom verifier model on a particular speaker or set of speakers can help significantly the performance of the system. A custom verifier model acts as a filter on top of the base openWakeWord model, determining whether a given activation was likely from a known target speaker. In particular, this can be a very effective way at reducing false activiations, as the model will be more focused on a the target speaker instead of attempting to activate for any speaker.
 
 There are trade-offs to this approach, however. In general, training a custom verifier model can be beneficial with two assumptions:
 
@@ -21,10 +21,12 @@ Training a custom verifier model is conceptually simple, and only requires a ver
 - Positive data (examples of wakeword or phrase)
     - Collect a minimum of 3 examples for each target speaker
     - Positive examples should be as close as possible to the expected deployment scenario, including some level of background noise if that is appropriate
+    - The capacity of the verifier model is small, it's not advised to train on a large number of positive examples or for more than a few speakers
 
 - Negative data collection
     - Collect a minimum of ~10 seconds of speech from each target speaker that does not contain the wakword, trying to include as much variation as possible in the speech
     - Optionally, collect ~5 seconds clips of typical background audio in the deployment evironment or use previously collected examples of false activations (this is one of the most effective ways to reduce false activations)
+    - The capacity of the verifier model is small, it's not advised to train on a very large number of negative examples as the verifier model should be focused just on the deployment environment and user(s)
 
 After collected the positive and negative examples, a custom verifier model can be trained with the `openwakeword.train_custom_verifier` function:
 
@@ -33,7 +35,7 @@ openwakeword.train_custom_verifier(
     positive_reference_clips = ["positive_clip1.wav", "positive_clip2.wav", "positive_clip3.wav"]
     negative_reference_clips = ["negative_clip1.wav", "negative_clip2.wav"]
     output_path = "path/to/directory/model.pkl"
-    model_name = "hey_jarvis.onnx" # the target model which matches the wake word/phrase of the collected positive examples
+    model_name = "hey_jarvis.onnx" # the target model path which matches the wake word/phrase of the collected positive examples
 )
 ```
 

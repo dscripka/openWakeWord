@@ -27,7 +27,7 @@ pip install https://github.com/dscripka/openWakeWord/releases/download/v0.1.1/sp
 
 Many thanks to [TeaPoly](https://github.com/TeaPoly/speexdsp-ns-python) for their Python wrapper of the Speex noise supression libraries.
 
-For quick local testing, use the included [example script](examples/detect_from_microphone.py) to try streaming detection from a local microphone.
+For quick local testing, clone this repository and use the included [example script](examples/detect_from_microphone.py) to try streaming detection from a local microphone. **Important note!** The model files are stored in this repo using [git-lfs](https://git-lfs.com/); make sure it is installed on your system and if needed use `git-lfs fetch --all` to make sure the the models download correctly.
 
 Adding openWakeWord to your own Python code requires just a few lines:
 
