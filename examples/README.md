@@ -14,7 +14,7 @@ Note that if you have more than one microphone connected to your system, you may
 
 ## Capture Activations
 
-This script is designed to run silently in the background and capture activations for the inlcluded pre-trained models. You can specify the initialization arguments, activation threshold, and output directory for the saved audio files for each activation. To run the script, follow these steps:
+This script is designed to run silently in the background and capture activations for the included pre-trained models. You can specify the initialization arguments, activation threshold, and output directory for the saved audio files for each activation. To run the script, follow these steps:
 
 1) Install the example-specific requirements:
 

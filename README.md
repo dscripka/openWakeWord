@@ -8,7 +8,7 @@ openWakeWord is an open-source wakeword library that can be used to create voice
 
 You can try an online demo of the included pre-trained models via HuggingFace Spaces [right here!](https://huggingface.co/spaces/davidscripka/openWakeWord).
 
-Note that real-time detection of a microphone stream can occassionally behave strangely in Spaces. For the most reliable testing, perform a local installation as described below.
+Note that real-time detection of a microphone stream can occasionally behave strangely in Spaces. For the most reliable testing, perform a local installation as described below.
 
 # Installation & Usage
 
@@ -18,14 +18,14 @@ Installing openWakeWord is simple and has minimal dependencies:
 pip install openwakeword
 ```
 
-To (optionally) use [Speex](https://www.speex.org/) noise suppresion on Linux systems to improve performance in noisy environments, install the Speex dependencies and then the pre-built Python package (see the assets [here](https://github.com/dscripka/openWakeWord/releases/tag/v0.1.1) for all .whl versions), adjusting for your python version and system architecture as needed.
+To (optionally) use [Speex](https://www.speex.org/) noise suppression on Linux systems to improve performance in noisy environments, install the Speex dependencies and then the pre-built Python package (see the assets [here](https://github.com/dscripka/openWakeWord/releases/tag/v0.1.1) for all .whl versions), adjusting for your python version and system architecture as needed.
 
 ```
 sudo apt-get install libspeexdsp-dev
 pip install https://github.com/dscripka/openWakeWord/releases/download/v0.1.1/speexdsp_ns-0.1.2-cp38-cp38-linux_x86_64.whl
 ```
 
-Many thanks to [TeaPoly](https://github.com/TeaPoly/speexdsp-ns-python) for their Python wrapper of the Speex noise supression libraries.
+Many thanks to [TeaPoly](https://github.com/TeaPoly/speexdsp-ns-python) for their Python wrapper of the Speex noise suppression libraries.
 
 For quick local testing, clone this repository and use the included [example script](examples/detect_from_microphone.py) to try streaming detection from a local microphone. **Important note!** The model files are stored in this repo using [git-lfs](https://git-lfs.com/); make sure it is installed on your system and if needed use `git-lfs fetch --all` to make sure the the models download correctly.
 
@@ -46,15 +46,15 @@ frame = my_function_to_get_audio_frame()
 prediction = model.predict(frame)
 ```
 
-# Reccomendations for Usage
+# Recommendations for Usage
 
-## Noise Suppresion and Voice Activity Detection (VAD)
+## Noise Suppression and Voice Activity Detection (VAD)
 
 While the default settings for openWakeWord will work well in many cases, there are adjustable parameters in openWakeWord that can improve performance in some deployment scenarios.
 
 On supported platforms (currently only X86 and Arm64 linux), Speex noise suppression can be enabled by setting the `enable_speex_noise_suppression=True` when instantiating an openWakeWord model. This can improve performance when relatively constant background noise is present.
 
-Second, a voice activity deteciton (VAD) model from [Silero](https://github.com/snakers4/silero-vad) is included with openWakeWord, and can be enabled by setting the `vad_threshold` argument to a value between 0 and 1 when instantiating an openWakeWord model. This will only allow a positive prediction from openWakeWord when the VAD model simultaneously has a score above the specified threshold, which can significantly reduce false-positive activations in the present of non-speech noise.
+Second, a voice activity detection (VAD) model from [Silero](https://github.com/snakers4/silero-vad) is included with openWakeWord, and can be enabled by setting the `vad_threshold` argument to a value between 0 and 1 when instantiating an openWakeWord model. This will only allow a positive prediction from openWakeWord when the VAD model simultaneously has a score above the specified threshold, which can significantly reduce false-positive activations in the present of non-speech noise.
 
 ## Threshold Scores for Activation
 
@@ -62,17 +62,17 @@ All of the included openWakeWord models were trained to work well with a default
 
 ## User-specific models
 
-If the baseline performance of openWakeWord models is not sufficent for a given application (specifically, if the false activation rate is unacceptably high), it is possible to train [custom verifier models](docs/custom_verifier_models.md) for specific voices that act as a second-stage filter on predictions (i.e., only allow activations through that were likely spoken by a known set of voices). This can greatly improve performance, at the cost of making the openWakeWord system less likely to respond to voices new voices.
+If the baseline performance of openWakeWord models is not sufficient for a given application (specifically, if the false activation rate is unacceptably high), it is possible to train [custom verifier models](docs/custom_verifier_models.md) for specific voices that act as a second-stage filter on predictions (i.e., only allow activations through that were likely spoken by a known set of voices). This can greatly improve performance, at the cost of making the openWakeWord system less likely to respond to voices new voices.
 
 # Project Goals
 
 openWakeWord has four high-level goals, which combine to (hopefully!) produce a framework that is simple to use *and* extend.
 
-1) Be fast *enough* for real-world usage, while maintaining ease of use and development. For example, a single core of a Raspberry Pi 3 can run 15-20 openWakeWord models simultaneously in real-time. However, the models are likely still too large for less powerful systems or microcontrollers. Commercial options like [Picovoice Porcupine](https://picovoice.ai/platform/porcupine/) or [Fluent Wakeword](https://fluent.ai/products/wakeword/) are likely better suited for highly constrained hardware environments.
+1) Be fast *enough* for real-world usage, while maintaining ease of use and development. For example, a single core of a Raspberry Pi 3 can run 15-20 openWakeWord models simultaneously in real-time. However, the models are likely still too large for less powerful systems or micro-controllers. Commercial options like [Picovoice Porcupine](https://picovoice.ai/platform/porcupine/) or [Fluent Wakeword](https://fluent.ai/products/wakeword/) are likely better suited for highly constrained hardware environments.
 
 2) Be accurate *enough* for real-world usage. The included models are typically have false-accept and false-reject rates below the annoyance threshold for the average user. This is obviously subjective, by a false-accept rate of <0.5 per hour and a false-reject rate of <5% is often reasonable in practice. See the [Performance & Evaluation](#performance-and-evaluation) section for details about how well the included models can be expected to perform in practice.
 
-2) Have a simple model architecture and inference process. Models process a stream of audio data in 80 ms frames, and return a score between 0 and 1 for each frame indicating the confideance that a wake word/phrase has been detected. All models also have a shared feature extraction backbone, so that each additional model only has a small impact to overall system complexity and resource requirements.
+2) Have a simple model architecture and inference process. Models process a stream of audio data in 80 ms frames, and return a score between 0 and 1 for each frame indicating the confidence that a wake word/phrase has been detected. All models also have a shared feature extraction backbone, so that each additional model only has a small impact to overall system complexity and resource requirements.
 
 4) Require **little to no manual data collection** to train new models. The included models (see the [Pre-trained Models](#pre-trained-models) section for more details) were all trained with *100% synthetic* speech generated from text-to-speech models. Training new models is a simple as generating new clips for the target wake word/phrase and training a small model on top of of the frozen shared feature extractor. See the [Training New Models](#training-new-models) section for more details.
 
@@ -84,7 +84,7 @@ openWakeWord comes with pre-trained models for common words & phrases. Currently
 
 The table below lists each model, examples of the word/phrases it is trained to recognize, and the associated documentation page for additional detail. Many of these models are trained on multiple variations of the same word/phrase; see the individual documentation pages for each model to see all supported word & phrase variations.
 
-| Model | Detected Speech | Documenation Page |
+| Model | Detected Speech | Documentation Page |
 | ------------- | ------------- | ------------- |
 | alexa | "alexa"| [docs](docs/models/alexa.md) |
 | hey mycroft | "hey mycroft" | [docs](docs/models/hey_mycroft.md) |
@@ -102,13 +102,13 @@ openWakeword models are composed of three separate components:
 
 1) A pre-processing function that computes [melspectrogram](https://pytorch.org/audio/main/generated/torchaudio.transforms.MelSpectrogram.html) of the input audio data. For openWakeword, an ONNX implementation of Torch's melspectrogram function with fixed parameters is used to enable efficient performance across devices.
 
-2) A shared feature extraction backbone model that converts melspectrogram inputs into general-purpose speech audio embeddings. This [model](https://arxiv.org/abs/2002.01322) is provided by [Google](https://tfhub.dev/google/speech_embedding/1) as a TFHub module under an [Apache-2.0](https://opensource.org/licenses/Apache-2.0) license. For openWakeWord, this model was manually re-implemented to separate out different functionality and allow for more control of architecture modifications compared to a TFHub module. The model itself is series of relatively simple convoluational blocks, and gains its strong performance from extensive pre-training on large amounts of data. This model is the core component of openWakeWord, and enables the strong performance that is seen even when training on fully-synthetic data.
+2) A shared feature extraction backbone model that converts melspectrogram inputs into general-purpose speech audio embeddings. This [model](https://arxiv.org/abs/2002.01322) is provided by [Google](https://tfhub.dev/google/speech_embedding/1) as a TFHub module under an [Apache-2.0](https://opensource.org/licenses/Apache-2.0) license. For openWakeWord, this model was manually re-implemented to separate out different functionality and allow for more control of architecture modifications compared to a TFHub module. The model itself is series of relatively simple convolutional blocks, and gains its strong performance from extensive pre-training on large amounts of data. This model is the core component of openWakeWord, and enables the strong performance that is seen even when training on fully-synthetic data.
 
 3) A classification model that follows the shared (and frozen) feature extraction model. The structure of this classification model is arbitrary, but in practice a simple fully-connected network or 2 layer RNN works well.
 
 # Performance and Evaluation
 
-Evaluting wake word/phrase detection models is challenging, and it is often very difficult to assess how different models presented in papers or other projects will perform *when deployed* with respect to two critical metrics: false-reject rates and false-accept rates. For clarity in definitions:
+Evaluating wake word/phrase detection models is challenging, and it is often very difficult to assess how different models presented in papers or other projects will perform *when deployed* with respect to two critical metrics: false-reject rates and false-accept rates. For clarity in definitions:
 
 A *false-reject* is when the model fails to detect an intended activation from a user.
 
@@ -122,7 +122,7 @@ For openWakeWord, evaluation follows two principles:
 
 While other wakeword evaluation standards [do exist](https://github.com/Picovoice/wake-word-benchmark), for openWakeWord it was decided that a custom evaluation would better indicate what performance users can expect for real-world deployments. Specifically:
 
-1) *false-reject* rates are calculated from either clean recordings of the wakeword that are mixed with background noise at realistic signal-to-noise ratios (e.g., 5-10 dB) *and* reverberted with room Impulse Response Functions (RIRs) to better simulate far-field audio, *or* manually collected data from realistic deployment environments (e.g., far-field capture with normal environment noise).
+1) *false-reject* rates are calculated from either clean recordings of the wakeword that are mixed with background noise at realistic signal-to-noise ratios (e.g., 5-10 dB) *and* reverberated with room Impulse Response Functions (RIRs) to better simulate far-field audio, *or* manually collected data from realistic deployment environments (e.g., far-field capture with normal environment noise).
 
 2) *false-accept* rates are determined by using the [Dinner Party Corpus](https://www.amazon.science/publications/dipco-dinner-party-corpus) dataset, which represents ~5.5 hours of far-field speech, background music, and miscellaneous noise. This dataset sets a realistic (if challenging) goal for how many false activations might occur in a similar situation.
 
@@ -136,7 +136,7 @@ As a second illustration, the false-accept/false-reject rate of the included `"h
 
 ![FPR/FRR curve for "hey mycroft" pre-trained model](docs/models/images/hey_mycroft_performance.png)
 
-Again, for at least this test data and prepration, openWakeWord produces a model at least as good as existing solutions.
+Again, for at least this test data and preparation, openWakeWord produces a model at least as good as existing solutions.
 
 However, in should noted that for both of these tests sample sizes are small and there are issues ([1](https://github.com/Picovoice/wake-word-benchmark/issues/13), [2](https://github.com/MycroftAI/mycroft-precise/issues/237)) with the evaluation of the other libraries that suggest these results should be interpreted cautiously. As such, the only claim being made is that openWakeWord models are broadly competitive with comparable offerings. You are strongly encouraged to [test openWakeWord](#installation--usage) to determine if it will meet the requirements of your use-case.
 
@@ -160,17 +160,17 @@ Due to a combination of variability in the generated speech and the extensive pr
 
 2) The models also respond relatively well to wakewords and phrases spoken at different speeds (within reason).
 
-3) The models are able to handle some variability in the phrasing of a given command. This behavior was not entirely a surpise, given that [others](https://arxiv.org/abs/1904.03670) have reported similar benefits when training end-to-end spoken language understanding systems. For example, the included [pre-trained weather model](docs/models/weather.md) will typically still respond correctly to a phrase like "how is the weather today" despite not training directly on that phrase (though false rejections rates will likely be higher, on average, compared to phrases closer to the training data).
+3) The models are able to handle some variability in the phrasing of a given command. This behavior was not entirely a surprise, given that [others](https://arxiv.org/abs/1904.03670) have reported similar benefits when training end-to-end spoken language understanding systems. For example, the included [pre-trained weather model](docs/models/weather.md) will typically still respond correctly to a phrase like "how is the weather today" despite not training directly on that phrase (though false rejections rates will likely be higher, on average, compared to phrases closer to the training data).
 
 ### Background Noise
 
-While the models are trained with background noise to increase robustness, in some cases additional noise suppresion can improve performance. Setting the `enable_speex_noise_suppression=True` argument during openWakeWord model initialization will use the efficient Speex noise suppresion algorithm to pre-process the audio data prior to prediction. This can reduce both false-reject rates and false-accept rates, though testing in a realistic deployment environment is strongly reccomended.
+While the models are trained with background noise to increase robustness, in some cases additional noise suppression can improve performance. Setting the `enable_speex_noise_suppression=True` argument during openWakeWord model initialization will use the efficient Speex noise suppression algorithm to pre-process the audio data prior to prediction. This can reduce both false-reject rates and false-accept rates, though testing in a realistic deployment environment is strongly recommended.
 
 # Training New Models
 
 Training new models is conceptually simple, and the entire process is demonstrated in a [tutorial notebook](notebooks/training_models.ipynb).
 
-Fundamentally, a new model requires o data generation and collection steps:
+Fundamentally, a new model requires two data generation and collection steps:
 
 1) Generate new training data for the desired wakeword/phrase using open-source speech-to-text systems (see [Synthetic Data Generation](docs/synthetic_data_generation.md) for more details). These models and the generation code are hosted in a separate [repository](https://github.com/dscripka/synthetic_speech_dataset_generation). The number of generated examples required can vary, a minimum of several thousand is recommended and performance seems to increase smoothly with increasing dataset size.
 
@@ -180,7 +180,7 @@ Fundamentally, a new model requires o data generation and collection steps:
 
 Currently, openWakeWord only supports English, primarily because the pre-trained text-to-speech models used to generate training data are all based on english datasets. It's likely that speech-to-text models trained on other languages would also work well, but non-english models & datasets are less commonly available.
 
-Future release roadmaps may have non-english support. In particular, [Mycroft.AIs Mimic 3](https://github.com/MycroftAI/mimic3-voices) TTS engine may work well to help extend some support to other languages.
+Future release road maps may have non-english support. In particular, [Mycroft.AIs Mimic 3](https://github.com/MycroftAI/mimic3-voices) TTS engine may work well to help extend some support to other languages.
 
 # License
 

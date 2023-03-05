@@ -6,7 +6,7 @@ Other similar phrases such as just "mycroft" or may also work, but likely with h
 
 # Model Architecture
 
-The model is a simple 3-layer full-connected network, that takes the flattened input features from the frozen audio embedding mode. ReLU activations and layer norms are inserted between the layers. A representive (but not exact) example of this structure is shown below.
+The model is a simple 3-layer full-connected network, that takes the flattened input features from the frozen audio embedding mode. ReLU activations and layer norms are inserted between the layers. A representative (but not exact) example of this structure is shown below.
 
 ```
 ==========================================================================================
@@ -79,4 +79,4 @@ The false-accept/false-reject curve for the model on the test data is shown belo
 
 # Other Considerations
 
-While the model was trained to be robust to background noise and reverberation, it will still perform the best when the audio is relativey clean and free of overly loud background noise. In particular, the presence of audio playback of music/speech from the same device that is capturing the microphone stream may result in significantly higher false-reject rates unless acoustic echo cancellation (AEC) is performed via hardware or software.
+While the model was trained to be robust to background noise and reverberation, it will still perform the best when the audio is relatively clean and free of overly loud background noise. In particular, the presence of audio playback of music/speech from the same device that is capturing the microphone stream may result in significantly higher false-reject rates unless acoustic echo cancellation (AEC) is performed via hardware or software.
