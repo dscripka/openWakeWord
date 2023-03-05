@@ -68,11 +68,16 @@ parser.add_argument(
     default=False,
     required=False
 )
-
 parser.add_argument(
     "--model",
     help="The model to use for openWakeWord, leave blank to use all available models",
     type=str,
+    required=False
+)
+parser.add_argument(
+    "--disable_activation_sound",
+    help="Disables the activation sound, clips are silently captured",
+    action='store_true',
     required=False
 )
 
@@ -151,4 +156,5 @@ if __name__ == "__main__":
                 fname = detect_time + f"_{mdl}.wav"
                 scipy.io.wavfile.write(os.path.join(os.path.abspath(args.output_dir), fname), 16000, audio_context)
                 
-                playBeep(os.path.join(os.path.dirname(__file__), 'audio', 'activation.wav'), audio)
+                if not args.disable_activation_sound:
+                    playBeep(os.path.join(os.path.dirname(__file__), 'audio', 'activation.wav'), audio)
