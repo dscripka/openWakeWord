@@ -39,7 +39,7 @@ class Model():
             class_mapping_dicts: List[dict] = [],
             enable_speex_noise_suppression: bool = False,
             vad_threshold: float = 0,
-            custom_verifier_models: Union[bool, dict] = False,
+            custom_verifier_models: dict = {},
             custom_verifier_threshold: float = 0.1,
             **kwargs
             ):
@@ -111,6 +111,14 @@ class Model():
             if isinstance(custom_verifier_models, dict):
                 if custom_verifier_models.get(mdl_name, False):
                     self.custom_verifier_models[mdl_name] = pickle.load(open(custom_verifier_models[mdl_name], 'rb'))
+
+            if len(self.custom_verifier_models.keys()) < len(custom_verifier_models.keys()):
+                raise ValueError(
+                    "Custom verifier models were provided, but some were not matched with a base model!"
+                    " Make sure that the keys provided in the `custom_verifier_models` dictionary argument"
+                    " exactly match that of the `.models` attribute of an instantiated openWakeWord Model object"
+                    " that has the same base models but doesn't have custom verifier models."
+                )
 
         # Create buffer to store frame predictions
         self.prediction_buffer: DefaultDict[str, deque] = defaultdict(partial(deque, maxlen=30))
@@ -208,10 +216,11 @@ class Model():
                 for cls in predictions.keys():
                     if predictions[cls] >= self.custom_verifier_threshold:
                         parent_model = self.get_parent_model_from_label(cls)
-                        verifier_prediction = self.custom_verifier_models[parent_model].predict_proba(
-                            self.preprocessor.get_features(self.model_inputs[mdl])
-                        )[0][-1]
-                        predictions[cls] = verifier_prediction
+                        if self.custom_verifier_models.get(parent_model, False):
+                            verifier_prediction = self.custom_verifier_models[parent_model].predict_proba(
+                                self.preprocessor.get_features(self.model_inputs[mdl])
+                            )[0][-1]
+                            predictions[cls] = verifier_prediction
 
             # Update prediction buffer, and zero predictions for first 5 frames during model initialization
             for cls in predictions.keys():

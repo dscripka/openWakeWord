@@ -72,7 +72,15 @@ class TestModels:
                 model_name=os.path.join("openwakeword", "resources", "models", "hey_mycroft_v0.1.onnx")
             )
 
-            # Load model with verifier model
+            with pytest.raises(ValueError):
+                # Load model with verifier model incorrectly to catch ValueError
+                owwModel = openwakeword.Model(
+                    wakeword_model_paths=[os.path.join("openwakeword", "resources", "models", "hey_mycroft_v0.1.onnx")],
+                    custom_verifier_models={"bad_key": os.path.join(tmp_dir, "verifier_model.pkl")},
+                    custom_verifier_threshold=0.3,
+                )
+
+            # Load model with verifier model incorrectly to catch ValueError
             owwModel = openwakeword.Model(
                 wakeword_model_paths=[os.path.join("openwakeword", "resources", "models", "hey_mycroft_v0.1.onnx")],
                 custom_verifier_models={"hey_mycroft_v0.1": os.path.join(tmp_dir, "verifier_model.pkl")},
