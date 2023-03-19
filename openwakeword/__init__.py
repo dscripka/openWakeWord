@@ -15,6 +15,9 @@ models = {
     "hey_jarvis": {
         "model_path": os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources/models/hey_jarvis_v0.1.onnx")
     },
+    "hey_rhasspy": {
+        "model_path": os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources/models/hey_rhasspy_v0.1.onnx")
+    },
     "timer": {
         "model_path": os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources/models/timer_v0.1.onnx")
     },

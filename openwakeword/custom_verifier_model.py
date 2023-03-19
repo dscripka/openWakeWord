@@ -22,6 +22,7 @@ import scipy
 import pickle
 
 from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import FunctionTransformer, StandardScaler
 
@@ -89,8 +90,13 @@ def get_reference_clip_features(
 def flatten_features(x):
     return [i.flatten() for i in x]
 
+def make_sklearn_pipeline():
+    # clf = SVC(gamma='auto', probability=True)
+    clf = LogisticRegression(random_state=0, max_iter=2000, C=0.01)
+    pipeline = make_pipeline(FunctionTransformer(flatten_features), StandardScaler(), clf)
+    return pipeline
 
-def train_verifier_model(features: np.ndarray, labels: np.ndarray):
+def train_verifier_model(features: np.ndarray, labels: np.ndarray, **kwargs):
     """
     Train a logistic regression binary classifier model on the provided features and labels
 
@@ -104,8 +110,8 @@ def train_verifier_model(features: np.ndarray, labels: np.ndarray):
         The trained scikit-learn logistic regression model
     """
     # C value matters alot here, depending on dataset size (larger datasets work better with larger C?)
-    clf = LogisticRegression(random_state=0, max_iter=2000, C=0.001)
-    pipeline = make_pipeline(FunctionTransformer(flatten_features), StandardScaler(), clf)
+    # clf = LogisticRegression(random_state=0, max_iter=2000, C=0.001, **kwargs)
+    pipeline = make_sklearn_pipeline()
     pipeline.fit(features, labels)
 
     return pipeline
@@ -127,7 +133,7 @@ def train_custom_verifier(
                                         of the target wake word/phrase.
         negative_reference_clips (str): The path to a directory containing single-channel 16khz, 16-bit WAV files
                                         of miscellaneous speech not containing the target wake word/phrase.
-        output_path (str): The location to save the trained verifier model (as a scikit-learn .joblib file)
+        output_path (str): The location to save the trained verifier model (as a Python pickle file)
         model_name (str): The name or path of the trained openWakeWord model that the verifier model will be
                           based on. If only a name, it must be one of the pre-trained models included in the
                           openWakeWord release.
@@ -152,9 +158,9 @@ def train_custom_verifier(
          for i in tqdm(positive_reference_clips, desc="Processing positive reference clips")]
     )
     if positive_features.shape[0] == 0:
-        raise ValueError("The positive features were created! Make sure that"
+        raise ValueError("No positive features were created! Make sure that"
                          " the positive reference clips contain the appropriate audio"
-                         " for the desired model")
+                         " for the desired model.")
 
     # Get features from negative reference clips
     negative_features = np.vstack(
@@ -166,7 +172,8 @@ def train_custom_verifier(
     print("Training and saving verifier model...")
     lr_model = train_verifier_model(
         np.vstack((positive_features, negative_features)),
-        np.array([1]*positive_features.shape[0] + [0]*negative_features.shape[0])
+        np.array([1]*positive_features.shape[0] + [0]*negative_features.shape[0]),
+        **kwargs
     )
 
     # Save logistic regression model to specified output location

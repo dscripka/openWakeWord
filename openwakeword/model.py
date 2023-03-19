@@ -41,6 +41,7 @@ class Model():
             vad_threshold: float = 0,
             custom_verifier_models: dict = {},
             custom_verifier_threshold: float = 0.1,
+            custom_verifier_model_online_learning: bool=False,
             **kwargs
             ):
         """Initialize the openWakeWord model object.
@@ -93,6 +94,9 @@ class Model():
         self.model_input_names = {}
         self.custom_verifier_models = {}
         self.custom_verifier_threshold = custom_verifier_threshold
+        self.custom_verifier_data = {}
+        self.custom_verifier_model_online_learning = custom_verifier_model_online_learning
+        self.custom_verifier_model_last_train_time = time.time()
         for mdl_path, mdl_name in zip(wakeword_model_paths, wakeword_model_names):
             # Load openwakeword models
             self.models[mdl_name] = ort.InferenceSession(mdl_path, sess_options=sessionOptions,
@@ -111,6 +115,15 @@ class Model():
             if isinstance(custom_verifier_models, dict):
                 if custom_verifier_models.get(mdl_name, False):
                     self.custom_verifier_models[mdl_name] = pickle.load(open(custom_verifier_models[mdl_name], 'rb'))
+                else:
+                    self.custom_verifier_models[mdl_name] = openwakeword.custom_verifier_model.make_sklearn_pipeline()
+                
+                self.custom_verifier_data[mdl_name] = {
+                    "features": {
+                        "positive": deque(maxlen=1000),
+                        "negative": deque(maxlen=1000)
+                    }
+                }
 
             if len(self.custom_verifier_models.keys()) < len(custom_verifier_models.keys()):
                 raise ValueError(
@@ -201,9 +214,10 @@ class Model():
                 model_start = time.time()
 
             # Run model
+            frame_features = self.preprocessor.get_features(self.model_inputs[mdl])
             prediction = self.models[mdl].run(
                                     None,
-                                    {input_name: self.preprocessor.get_features(self.model_inputs[mdl])}
+                                    {input_name: frame_features}
                                 )
             if self.model_outputs[mdl] == 1:
                 predictions[mdl] = prediction[0][0][0]
@@ -211,16 +225,55 @@ class Model():
                 for int_label, cls in self.class_mapping[mdl].items():
                     predictions[cls] = prediction[0][0][int(int_label)]
 
-            # Update scores based on custom verifier model
+            # Perform steps related to custom verifier models
             if self.custom_verifier_models != {}:
                 for cls in predictions.keys():
+                    # Update cached negative data for verifier model (if using online learning) if score is above arbitrary level
+                    if self.custom_verifier_model_online_learning and predictions[cls] >= .01 and \
+                        predictions[cls] < 0.05:
+                        self.custom_verifier_data[cls]["features"]["negative"].append(frame_features.flatten())
+                    # elif self.custom_verifier_model_online_learning and predictions[cls] > 0.01 and predictions[cls] < 0.1:
+                    #     self.custom_verifier_data[cls]["features"]["negative"].append(np.random.random((16,96)).flatten())
+
+                    # Update scores of positive predictions
+                    positive_examples_added = False
                     if predictions[cls] >= self.custom_verifier_threshold:
                         parent_model = self.get_parent_model_from_label(cls)
                         if self.custom_verifier_models.get(parent_model, False):
-                            verifier_prediction = self.custom_verifier_models[parent_model].predict_proba(
-                                self.preprocessor.get_features(self.model_inputs[mdl])
-                            )[0][-1]
-                            predictions[cls] = verifier_prediction
+                            if hasattr(self.custom_verifier_models[parent_model], "classes_"):
+                                # Get verifier prediction and update scores
+                                verifier_prediction = self.custom_verifier_models[parent_model].predict_proba(
+                                    self.preprocessor.get_features(self.model_inputs[mdl])
+                                )[0][-1]
+                                predictions[cls] = verifier_prediction
+
+                            # Update data cache for verifier models
+                            if self.custom_verifier_model_online_learning and predictions[cls] >= self.custom_verifier_threshold:
+                                self.custom_verifier_data[cls]["features"]["positive"].append(frame_features.flatten())
+                                positive_examples_added = True
+
+
+                    # Train verifier model on latest data at most every 10 seconds
+                    if self.custom_verifier_model_online_learning and \
+                        ((time.time() - self.custom_verifier_model_last_train_time) >= 5 or positive_examples_added):
+                        self.custom_verifier_model_last_train_time = time.time()
+                        parent_model = self.get_parent_model_from_label(cls)
+                        y = np.array(
+                            [1]*np.array(self.custom_verifier_data[cls]["features"]["positive"]).shape[0] + \
+                            [0]*np.array(self.custom_verifier_data[cls]["features"]["negative"]).shape[0]
+                        )
+                        
+                        # need a minimum number of examples to train
+                        if len(self.custom_verifier_data[cls]["features"]["positive"]) > 5 and \
+                           len(self.custom_verifier_data[cls]["features"]["negative"]) > 5 :
+                            print("Updating custom verifier model")
+                            x = np.vstack((
+                                np.array(self.custom_verifier_data[cls]["features"]["positive"]),
+                                np.array(self.custom_verifier_data[cls]["features"]["negative"]),
+                            ))
+                            self.custom_verifier_models[parent_model].fit(x, y)
+
+                            print("Accuracy: ", sum(y == self.custom_verifier_models[parent_model].predict(x))/len(x))
 
             # Update prediction buffer, and zero predictions for first 5 frames during model initialization
             for cls in predictions.keys():
