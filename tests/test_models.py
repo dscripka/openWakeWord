@@ -47,6 +47,9 @@ class TestModels:
         # Prediction on random data
         owwModel.predict(np.random.randint(-1000, 1000, 1280).astype(np.int16))
 
+        # Prediction on random data with different chunk size
+        owwModel.predict(np.random.randint(-1000, 1000, 1280*2).astype(np.int16))
+
     def test_custom_model_label_mapping_dict(self):
         # Load model with model path
         owwModel = openwakeword.Model(wakeword_model_paths=[

@@ -16,27 +16,40 @@
 import pyaudio
 import numpy as np
 from openwakeword.model import Model
+import argparse
+
+# Parse input arguments
+parser=argparse.ArgumentParser()
+parser.add_argument(
+    "--chunk_size",
+    help="How much audio (in samples) to predict on at once",
+    type=int,
+    default=1280,
+    required=True
+)
+
+args=parser.parse_args()
 
 # Get microphone stream
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
 RATE = 16000
-CHUNK = 1280
+CHUNK = args.chunk_size
 audio = pyaudio.PyAudio()
 mic_stream = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
 
 # Load pre-trained openwakeword models
 owwModel = Model()
 
-# Run capture loop, checking for hotwords
+# Run capture loop continuosly, checking for wakewords
 if __name__ == "__main__":
-    # Predict continuously on audio stream
+    # Generate output string header
     print("\n\n")
     print("#"*100)
     print("Listening for wakewords...")
     print("#"*100)
     print("\n"*13)
-    
+
     while True:
         # Get audio
         audio = np.frombuffer(mic_stream.read(CHUNK), dtype=np.int16)
@@ -44,7 +57,7 @@ if __name__ == "__main__":
         # Feed to openWakeWord model
         prediction = owwModel.predict(audio)
 
-        # Generate output string header
+        # Column titles
         n_spaces = 16
         output_string_header = """
             Model Name         | Score | Wakeword Status

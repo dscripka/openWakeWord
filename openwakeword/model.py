@@ -200,11 +200,26 @@ class Model():
             if timing:
                 model_start = time.time()
 
-            # Run model
-            prediction = self.models[mdl].run(
-                                    None,
-                                    {input_name: self.preprocessor.get_features(self.model_inputs[mdl])}
-                                )
+            # Run model to get predictions
+            if len(x) > 1280:
+                group_predictions = []
+                for i in np.arange(len(x)//1280-1, -1, -1):
+                    group_predictions.extend(
+                        self.models[mdl].run(
+                            None,
+                            {input_name: self.preprocessor.get_features(
+                                    self.model_inputs[mdl],
+                                    start_ndx=-self.model_inputs[mdl] - i
+                            )}
+                        )
+                    )
+                prediction = np.array(group_predictions).max(axis=0)[None, ]
+            else:
+                prediction = self.models[mdl].run(
+                                        None,
+                                        {input_name: self.preprocessor.get_features(self.model_inputs[mdl])}
+                                    )
+
             if self.model_outputs[mdl] == 1:
                 predictions[mdl] = prediction[0][0][0]
             else:
@@ -267,7 +282,7 @@ class Model():
         else:
             return predictions
 
-    def predict_clip(self, clip: Union[str, np.ndarray], padding: int = 1, **kwargs):
+    def predict_clip(self, clip: Union[str, np.ndarray], padding: int = 1, chunk_size=1280, **kwargs):
         """Predict on an full audio clip, simulating streaming prediction.
         The input clip must bit a 16-bit, 16 khz, single-channel WAV file.
 
@@ -276,6 +291,7 @@ class Model():
                                            or an 1D array containing the same type of data
             padding (int): How many seconds of silence to pad the start/end of the clip with
                             to make sure that short clips can be processed correctly (default: 1)
+            chunk_size (int): The size (in samples) of each chunk of audio to pass to the model
             kwargs: Any keyword arguments to pass to the class `predict` method
 
         Returns:
@@ -300,7 +316,7 @@ class Model():
 
         # Iterate through clip, getting predictions
         predictions = []
-        step_size = 1280
+        step_size = chunk_size
         for i in range(0, data.shape[0]-step_size, step_size):
             predictions.append(self.predict(data[i:i+step_size], **kwargs))
 
