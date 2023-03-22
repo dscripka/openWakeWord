@@ -67,6 +67,7 @@ class AudioFeatures():
         self.raw_data_buffer: Deque = deque(maxlen=sr*10)
         self.melspectrogram_buffer = np.ones((76, 32))  # n_frames x num_features
         self.melspectrogram_max_len = 10*97  # 97 is the number of frames in 1 second of 16hz audio
+        self.accumulated_samples = 0  # the samples added to the buffer since the audio preprocessor was last called
         self.feature_buffer = self._get_embeddings(np.zeros(160000).astype(np.int16))  # fill with blank data to start
         self.feature_buffer_max_len = 120  # ~10 seconds of feature buffer history
 
@@ -210,7 +211,7 @@ class AudioFeatures():
         if "CPU" in self.onnx_execution_provider:
             pool = ThreadPool(processes=ncpu)
 
-        # Calcuate array sizes and make batches
+        # Calculate array sizes and make batches
         n_frames = (x.shape[1] - 76)//8 + 1
         embedding_dim = 96  # fixed by embedding model
         embeddings = np.empty((x.shape[0], n_frames, embedding_dim), dtype=np.float32)
@@ -275,37 +276,62 @@ class AudioFeatures():
 
         return embeddings
 
-    def _streaming_melspectrogram(self, x):
+    def _streaming_melspectrogram(self, n_samples):
         """Note! There seem to be some slight numerical issues depending on the underlying audio data
         such that the streaming method is not exactly the same as when the melspectrogram of the entire
         clip is calculated. It's unclear if this difference is significant and will impact model performance.
         In particular padding with 0 or very small values seems to demonstrate the differences well.
         """
-        if len(x) < 400:
-            raise ValueError("The number of input frames must be at least 400 samples @ 16khz (25 ms)!")
-        self.raw_data_buffer.extend(x.tolist() if isinstance(x, np.ndarray) else x)
         self.melspectrogram_buffer = np.vstack(
-            (self.melspectrogram_buffer, self._get_melspectrogram(list(self.raw_data_buffer)[-len(x)-160*3:]))
+            (self.melspectrogram_buffer, self._get_melspectrogram(list(self.raw_data_buffer)[-n_samples-160*3:]))
         )
 
         if self.melspectrogram_buffer.shape[0] > self.melspectrogram_max_len:
             self.melspectrogram_buffer = self.melspectrogram_buffer[-self.melspectrogram_max_len:, :]
 
+    def _buffer_raw_data(self, x):
+        """
+        Adds raw audio data to the input buffer
+        """
+        if len(x) < 400:
+            raise ValueError("The number of input frames must be at least 400 samples @ 16khz (25 ms)!")
+        self.raw_data_buffer.extend(x.tolist() if isinstance(x, np.ndarray) else x)
+
     def _streaming_features(self, x):
-        if len(x) != 1280:
-            raise ValueError("You must provide input samples in frames of 1280 samples @ 1600khz."
-                             f"Received a frame of {len(x)} samples.")
-        self._streaming_melspectrogram(x)
-        x = self.melspectrogram_buffer[-76:].astype(np.float32)[None, :, :, None]
-        if x.shape[1] == 76:
-            self.feature_buffer = np.vstack((self.feature_buffer,
-                                             self.embedding_model.run(None, {'input_1': x})[0].squeeze()))
+        # if len(x) != 1280:
+        #     raise ValueError("You must provide input samples in frames of 1280 samples @ 1600khz."
+        #                      f"Received a frame of {len(x)} samples.")
+
+        # Add raw audio data to buffer
+        self._buffer_raw_data(x)
+        self.accumulated_samples += len(x)
+
+        # Only calculate melspectrogram every ~0.5 seconds to significantly increase efficiency
+        if self.accumulated_samples >= 1280:
+            self._streaming_melspectrogram(self.accumulated_samples)
+
+            # Calculate new audio embeddings/features based on update melspectrograms
+            for i in np.arange(self.accumulated_samples//1280-1, -1, -1):
+                ndx = -8*i
+                ndx = ndx if ndx != 0 else len(self.melspectrogram_buffer)
+                x = self.melspectrogram_buffer[-76 + ndx:ndx].astype(np.float32)[None, :, :, None]
+                if x.shape[1] == 76:
+                    self.feature_buffer = np.vstack((self.feature_buffer,
+                                                    self.embedding_model.run(None, {'input_1': x})[0].squeeze()))
+
+            # Reset raw data buffer counter
+            self.accumulated_samples = 0
 
         if self.feature_buffer.shape[0] > self.feature_buffer_max_len:
             self.feature_buffer = self.feature_buffer[-self.feature_buffer_max_len:, :]
 
-    def get_features(self, n_feature_frames: int = 16):
-        return self.feature_buffer[int(-1*n_feature_frames):, :][None, ].astype(np.float32)
+    def get_features(self, n_feature_frames: int = 16, start_ndx: int = -1):
+        if start_ndx != -1:
+            end_ndx = start_ndx + int(n_feature_frames) \
+                if start_ndx + n_feature_frames != 0 else len(self.feature_buffer)
+            return self.feature_buffer[start_ndx:end_ndx, :][None, ].astype(np.float32)
+        else:
+            return self.feature_buffer[int(-1*n_feature_frames):, :][None, ].astype(np.float32)
 
     def __call__(self, x):
         self._streaming_features(x)
@@ -328,7 +354,8 @@ def bulk_predict(
         prediction_function (str): The name of the method used to predict on the input audio files
                                    (default is the `predict_clip` method)
         ncpu (int): How many processes to create (up to max of available CPUs)
-        kwargs (dict): Any other keyword arguments to pass to the model initialization
+        kwargs (dict): Any other keyword arguments to pass to the model initialization or
+                       specified prediction function
 
     Returns:
         dict: A dictionary containing the predictions for each file, with the filepath as the key
