@@ -157,8 +157,9 @@ class Model():
         """Predict with all of the wakeword models on the input audio frames
 
         Args:
-            x (Union[ndarray]): The input audio data to predict on with the models. Must be 1280
-                                      samples of 16khz, 16-bit audio data.
+            x (Union[ndarray]): The input audio data to predict on with the models. Should be multiples of 80 ms
+                                (1280 samples), with longer lengths reducing overall CPU usage
+                                but decreasing detection latency.
             patience (dict): How many consecutive frames (of 1280 samples or 80 ms) above the threshold that must
                              be observed before the current frame will be returned as non-zero.
                              Must be provided as an a dictionary where the keys are the
