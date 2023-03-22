@@ -170,8 +170,9 @@ class Model():
         """Predict with all of the wakeword models on the input audio frames
 
         Args:
-            x (Union[ndarray]): The input audio data to predict on with the models. Must be 1280
-                                      samples of 16khz, 16-bit audio data.
+            x (Union[ndarray]): The input audio data to predict on with the models. Should be multiples of 80 ms
+                                (1280 samples), with longer lengths reducing overall CPU usage
+                                but increasing detection latency.
             patience (dict): How many consecutive frames (of 1280 samples or 80 ms) above the threshold that must
                              be observed before the current frame will be returned as non-zero.
                              Must be provided as an a dictionary where the keys are the
@@ -213,12 +214,29 @@ class Model():
             if timing:
                 model_start = time.time()
 
-            # Run model
-            frame_features = self.preprocessor.get_features(self.model_inputs[mdl])
-            prediction = self.models[mdl].run(
-                                    None,
-                                    {input_name: frame_features}
-                                )
+            # Run model to get predictions
+            if len(x) > 1280:
+                group_predictions = []
+                group_features = []
+                for i in np.arange(len(x)//1280-1, -1, -1):
+                    frame_features = self.preprocessor.get_features(
+                                        self.model_inputs[mdl],
+                                        start_ndx=-self.model_inputs[mdl] - i
+                                    )
+                    group_predictions.extend(
+                        self.models[mdl].run(None, {input_name: frame_features})
+                    )
+                    group_features.extend(frame_features)
+
+                prediction = np.array(group_predictions).max(axis=0)[None, ]
+                frame_features = group_features[np.array(group_predictions).argmax(axis=0)]
+            else:
+                frame_features = self.preprocessor.get_features(self.model_inputs[mdl])
+                prediction = self.models[mdl].run(
+                                        None,
+                                        {input_name: frame_features}
+                                    )
+
             if self.model_outputs[mdl] == 1:
                 predictions[mdl] = prediction[0][0][0]
             else:
@@ -320,7 +338,7 @@ class Model():
         else:
             return predictions
 
-    def predict_clip(self, clip: Union[str, np.ndarray], padding: int = 1, **kwargs):
+    def predict_clip(self, clip: Union[str, np.ndarray], padding: int = 1, chunk_size=1280, **kwargs):
         """Predict on an full audio clip, simulating streaming prediction.
         The input clip must bit a 16-bit, 16 khz, single-channel WAV file.
 
@@ -329,6 +347,7 @@ class Model():
                                            or an 1D array containing the same type of data
             padding (int): How many seconds of silence to pad the start/end of the clip with
                             to make sure that short clips can be processed correctly (default: 1)
+            chunk_size (int): The size (in samples) of each chunk of audio to pass to the model
             kwargs: Any keyword arguments to pass to the class `predict` method
 
         Returns:
@@ -353,7 +372,7 @@ class Model():
 
         # Iterate through clip, getting predictions
         predictions = []
-        step_size = 1280
+        step_size = chunk_size
         for i in range(0, data.shape[0]-step_size, step_size):
             predictions.append(self.predict(data[i:i+step_size], **kwargs))
 
