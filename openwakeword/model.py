@@ -78,6 +78,7 @@ class Model():
         sessionOptions = ort.SessionOptions()
         sessionOptions.inter_op_num_threads = 1
         sessionOptions.intra_op_num_threads = 1
+        sessionOptions.log_severity_level = 3
 
         # Get model paths for pre-trained models if user doesn't provide models to load
         if wakeword_model_paths == []:
@@ -271,7 +272,7 @@ class Model():
                                 positive_examples_added = True
 
 
-                    # Train verifier model on latest data at most every 10 seconds
+                    # Train verifier model on latest data at most every 10 seconds or after every positive detection
                     if self.custom_verifier_model_online_learning and \
                         ((time.time() - self.custom_verifier_model_last_train_time) >= 5 or positive_examples_added):
                         self.custom_verifier_model_last_train_time = time.time()
