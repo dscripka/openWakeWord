@@ -364,6 +364,11 @@ def bulk_predict(
     # Create openWakeWord model objects
     n_batches = max(1, len(file_paths)//ncpu)
     remainder = len(file_paths) % ncpu
+
+    if remainder == len(file_paths):
+        ncpu = len(file_paths)
+        remainder = 0
+
     chunks = [file_paths[i:i+n_batches] for i in range(0, max(1, len(file_paths)-remainder), n_batches)]
     for i in range(1, remainder+1):
         chunks[i-1].append(file_paths[-1*i])
