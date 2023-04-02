@@ -43,7 +43,7 @@ class TestModels:
             scipy.io.wavfile.write(os.path.join(tmp_dir, "negative_reference.wav"),
                                    16000, np.random.randint(-1000, 1000, 16000*4).astype(np.int16))
 
-            # Load random clips
+            # Load reference clips
             reference_clips = [os.path.join("tests", "data", "hey_mycroft_test.wav")]
             negative_clips = [os.path.join(tmp_dir, "negative_reference.wav")]
 
@@ -80,7 +80,7 @@ class TestModels:
                     custom_verifier_threshold=0.3,
                 )
 
-            # Load model with verifier model incorrectly to catch ValueError
+            # Load model with verifier model correctly
             owwModel = openwakeword.Model(
                 wakeword_model_paths=[os.path.join("openwakeword", "resources", "models", "hey_mycroft_v0.1.onnx")],
                 custom_verifier_models={"hey_mycroft_v0.1": os.path.join(tmp_dir, "verifier_model.pkl")},
@@ -89,3 +89,45 @@ class TestModels:
 
             # Prediction on random data
             owwModel.predict_clip(reference_clips[0])
+
+    def test_train_verifier_model_online(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            # Load model with online custom verifier model training
+            owwModel = openwakeword.Model(
+                wakeword_model_paths=[os.path.join("openwakeword", "resources", "models", "hey_mycroft_v0.1.onnx")],
+                custom_verifier_model_online_learning=True,
+                cache_directory=tmp_dir
+            )
+
+            # Load positive clip for online training
+            sr, reference_clip = scipy.io.wavfile.read(os.path.join("tests", "data", "hey_mycroft_test.wav"))
+
+            # Make combined clip
+            combined_clip = np.concatenate((
+                np.random.randint(-1000, 1000, 16000*10).astype(np.int16),
+                reference_clip,
+                np.random.randint(-1000, 1000, 16000*10).astype(np.int16),
+                reference_clip,
+                np.random.randint(-1000, 1000, 16000*10).astype(np.int16),
+                reference_clip,
+                np.random.randint(-1000, 1000, 16000*10).astype(np.int16),
+                reference_clip,
+                np.random.randint(-1000, 1000, 16000*10).astype(np.int16),
+                reference_clip,
+                np.random.randint(-1000, 1000, 16000*10).astype(np.int16),
+                reference_clip,
+                np.random.randint(-1000, 1000, 16000*10).astype(np.int16),
+                reference_clip,
+            ))
+
+            # Run prediction for online training
+            owwModel.predict_clip(combined_clip)
+
+            # Instantiate new model to load cache directory
+            owwModel = openwakeword.Model(
+                wakeword_model_paths=[os.path.join("openwakeword", "resources", "models", "hey_mycroft_v0.1.onnx")],
+                custom_verifier_model_online_learning=True,
+                cache_directory=tmp_dir
+            )
+
+            assert owwModel.custom_verifier_data != {}

@@ -22,7 +22,6 @@ import scipy
 import pickle
 
 from sklearn.linear_model import LogisticRegression
-from sklearn.svm import SVC
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import FunctionTransformer, StandardScaler
 
@@ -90,11 +89,13 @@ def get_reference_clip_features(
 def flatten_features(x):
     return [i.flatten() for i in x]
 
+
 def make_sklearn_pipeline():
     # clf = SVC(gamma='auto', probability=True)
     clf = LogisticRegression(random_state=0, max_iter=2000, C=0.01)
     pipeline = make_pipeline(FunctionTransformer(flatten_features), StandardScaler(), clf)
     return pipeline
+
 
 def train_verifier_model(features: np.ndarray, labels: np.ndarray, **kwargs):
     """
