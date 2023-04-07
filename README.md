@@ -64,7 +64,7 @@ All of the included openWakeWord models were trained to work well with a default
 
 ## User-specific models
 
-If the baseline performance of openWakeWord models is not sufficient for a given application (specifically, if the false activation rate is unacceptably high), it is possible to train [custom verifier models](docs/custom_verifier_models.md) for specific voices that act as a second-stage filter on predictions (i.e., only allow activations through that were likely spoken by a known set of voices). This can greatly improve performance, at the cost of making the openWakeWord system less likely to respond to voices new voices.
+If the baseline performance of openWakeWord models is not sufficient for a given application (specifically, if the false activation rate is unacceptably high), it is possible to train [custom verifier models](docs/custom_verifier_models.md) for specific voices that act as a second-stage filter on predictions (i.e., only allow activations through that were likely spoken by a known set of voices). This can greatly improve performance, at the cost of making the openWakeWord system less likely to respond to new voices.
 
 # Project Goals
 
