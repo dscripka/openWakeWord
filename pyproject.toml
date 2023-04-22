@@ -12,7 +12,7 @@ testpaths = [
 
 [project]
 name = "openwakeword"
-version = "0.3.1"
+version = "0.4.0"
 authors = [
   { name="David Scripka", email="david.scripka@gmail.com" },
 ]
