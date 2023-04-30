@@ -1,0 +1,178 @@
+<!-- https://www.w3schools.com/howto/howto_js_tabs.asp -->
+<!-- https://www.w3schools.com/howto/howto_js_filter_table.asp -->
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>openWakeWord WebUI</title>
+    <link rel="stylesheet" type="text/css" href="/style.css"/>
+  </head>
+  <body>
+
+    <!-- Set tabs for different content -->
+    <div class="tab">
+      <button class="tablinks" onclick="openTab(event, 'review_clips')" id="review_clips_button">Cached Audio Clips</button>
+      <button class="tablinks" onclick="openTab(event, 'streaming_predictions')">Realtime Predictions</button>
+    </div>
+
+    <!-- Create tab for reviewing cached clips -->
+    <div id="review_clips" class="tabcontent">
+      <h3>These are the cached clips of activations from the openWakeWord models, which are used when training the custom verifier models. Review and delete false positives as needed to improve performance of the verifier models.</h3>
+      <input type="text" id="filter_input" onkeyup="filterRows()" placeholder="Filter by name...">
+      <table id="audio-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Audio</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <!-- Tab for realtime prediction results -->
+    <div id="streaming_predictions" class="tabcontent">
+      <div>
+        <button onclick="plotModelPredictions('model1')">Model 1</button>
+        <button onclick="plotModelPredictions('model1')">Model 1</button>
+        <button onclick="plotModelPredictions('model1')">Model 1</button>
+      </div>
+      <canvas id="myCanvas" width="800" height="400"></canvas>
+    </div>
+
+    <script>
+      // Load default tab
+      document.getElementById("review_clips_button").click();
+
+      // Make a GET request to receive the names and audio data for all of the files
+      fetch('/list_cache_files')
+        .then(response => response.json())
+        .then(audioFiles => {
+          const tbody = document.querySelector('#audio-table tbody');
+
+          // Loop through each audio file and add a row to the table
+          audioFiles.forEach((audioFile, index) => {
+            const row = document.createElement('tr');
+
+            // Add filename and audio player to the table
+            const filenameCell = document.createElement('td');
+            filenameCell.textContent = audioFile.filename;
+            filenameCell.id = audioFile.filename;
+            row.appendChild(filenameCell);
+
+            const audioPlayer = document.createElement('audio');
+            audioPlayer.controls = true;
+            audioPlayer.src = audioFile.data;
+            row.appendChild(audioPlayer);
+
+            // Add delete button for each clip
+            const deleteButton = document.createElement('td')
+            // deleteCell.innerHTML = "<a href='/delete_clip?filename=" + audioFile.filename + "'>&#x2716;</a>"
+            deleteButton.innerHTML = '<u style="text-decoration-color:red" style><span style="color:red;">Delete</span><u>'
+            deleteButton.addEventListener('click', function (){
+              alert('Are you sure? This action can not be reversed.');
+
+              // Send GET request to delete file
+              fetch('/delete_clip?filename=' + audioFile.filename)
+
+              // Delete row from table
+              var table = document.getElementById("audio-table");
+              table.deleteRow(this.parentNode.rowIndex)
+            })
+            row.appendChild(deleteButton)
+
+            tbody.appendChild(row);
+          });
+        });
+
+      // Define the data points for the line plot
+      const data = [0.0, .2, .3, .4, .8, 1.0];
+
+      // Draw canvas data
+      const canvas = document.getElementById("myCanvas");
+      const ctx = canvas.getContext("2d");
+      ctx.canvas.width = window.innerWidth*0.9;
+
+      // Set up the x and y scales
+      const label_offset = 45;
+      const h = canvas.height*0.9;
+      const w = canvas.width - label_offset;
+      const xScale = w / (data.length - 1);
+      const yScale = h*0.9;
+
+      // Draw y-axis with labels
+      ctx.fillStyle = "black"; // set the color of the labels to black
+      ctx.textAlign = "right"; // align labels to right of y-axis
+      ctx.textBaseline = "middle"; // center labels vertically
+      const yLabels = [0, 0.25, 0.5, 0.75, 1.0]; // set values for y-axis labels
+      yLabels.forEach(label => {
+        const xPos = 30; // x position of label (adjust as needed)
+        const yPos = h - label * yScale; // y position of label
+        ctx.fillText(label.toString(), xPos, yPos);
+        ctx.beginPath();
+        ctx.moveTo(40, yPos);
+        ctx.lineTo(canvas.width, yPos);
+        ctx.strokeStyle = "#ccc";
+        ctx.stroke();
+      })
+      
+      // Define function to draw series
+      function plot_data(canvas, data, color) {        
+        // Draw the line plot
+        ctx.beginPath();
+        ctx.moveTo(0 + label_offset, h - data[0] * yScale);
+        for (let i = 1; i < data.length; i++) {
+          ctx.lineTo(i * xScale + label_offset, h - data[i] * yScale);
+        }
+        ctx.strokeStyle = color; 
+        ctx.stroke();
+      }
+      
+      plot_data(canvas, data, "red")
+
+      function filterRows() {
+        // Declare variables
+        var input, filter, table, tr, td, i, txtValue;
+        input = document.getElementById("filter_input");
+        filter = input.value.toUpperCase();
+        table = document.getElementById("audio-table");
+        tr = table.getElementsByTagName("tr");
+
+        // Loop through all table rows, and hide those who don't match the search query
+        for (i = 0; i < tr.length; i++) {
+          td = tr[i].getElementsByTagName("td")[0];
+          if (td) {
+            txtValue = td.textContent || td.innerText;
+            if (txtValue.toUpperCase().indexOf(filter) > -1) {
+              tr[i].style.display = "";
+            } else {
+              tr[i].style.display = "none";
+            }
+          }
+        }
+      }
+
+      function openTab(evt, tabName) {
+        // Declare all variables
+        var i, tabcontent, tablinks;
+
+        // Get all elements with class="tabcontent" and hide them
+        tabcontent = document.getElementsByClassName("tabcontent");
+        for (i = 0; i < tabcontent.length; i++) {
+          tabcontent[i].style.display = "none";
+        }
+
+        // Get all elements with class="tablinks" and remove the class "active"
+        tablinks = document.getElementsByClassName("tablinks");
+        for (i = 0; i < tablinks.length; i++) {
+          tablinks[i].className = tablinks[i].className.replace(" active", "");
+        }
+
+        // Show the current tab, and add an "active" class to the button that opened the tab
+        document.getElementById(tabName).style.display = "block";
+        evt.currentTarget.className += " active";
+      } 
+
+    </script>
+  </body>
+</html>

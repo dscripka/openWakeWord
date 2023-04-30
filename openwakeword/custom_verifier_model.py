@@ -92,7 +92,7 @@ def flatten_features(x):
 
 def make_sklearn_pipeline():
     # clf = SVC(gamma='auto', probability=True)
-    clf = LogisticRegression(random_state=0, max_iter=2000, C=0.01)
+    clf = LogisticRegression(random_state=0, max_iter=2000, C=0.01, class_weight='balanced')
     pipeline = make_pipeline(FunctionTransformer(flatten_features), StandardScaler(), clf)
     return pipeline
 

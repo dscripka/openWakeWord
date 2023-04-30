@@ -1,0 +1,68 @@
+#filter_input {
+    width: 20%; /* Full-width */
+    font-size: 16px; /* Increase font-size */
+    padding: 12px 10px 12px 10px; /* Add some padding */
+    border: 1px solid #ddd; /* Add a grey border */
+    margin-bottom: 10px; /* Add some space below the input */
+}
+  
+#audio-table {
+    border-collapse: collapse; /* Collapse borders */
+    width: 35%; /* Full-width */
+    border: 1px solid #ddd; /* Add a grey border */
+    font-size: 14px; /* Increase font-size */
+}
+
+#audio-table th, #audio-table td {
+    text-align: left; /* Left-align text */
+    padding: 10px; /* Add padding */
+}
+
+#audio-table tr {
+    /* Add a bottom border to all table rows */
+    border-bottom: 1px solid #ddd;
+}
+
+#audio-table tr.header, #audio-table tr:hover {
+    /* Add a grey background color to the table header and on hover */
+    background-color: #f1f1f1;
+}
+
+/* Style the tab */
+.tab {
+    overflow: hidden;
+    border: 1px solid #ccc;
+    background-color: #f1f1f1;
+}
+
+/* Style the buttons that are used to open the tab content */
+.tab button {
+    background-color: inherit;
+    float: left;
+    border: none;
+    outline: none;
+    cursor: pointer;
+    padding: 14px 16px;
+    transition: 0.3s;
+}
+
+/* Change background color of buttons on hover */
+.tab button:hover {
+    background-color: #ddd;
+}
+
+/* Create an active/current tablink class */
+.tab button.active {
+    background-color: #ccc;
+}
+
+/* Style the tab content */
+.tabcontent {
+    display: none;
+    padding: 6px 12px;
+    border: 1px solid #ccc;
+    border-top: none;
+}
+
+/* Click button over delete text */
+.delete { cursor: pointer; }

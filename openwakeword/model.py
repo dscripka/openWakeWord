@@ -19,6 +19,8 @@ import openwakeword
 from openwakeword.utils import AudioFeatures
 
 import wave
+import soundfile
+import uuid
 import os
 from pathlib import Path
 import pickle
@@ -125,12 +127,17 @@ class Model():
             self.model_input_names[mdl_name] = self.models[mdl_name].get_inputs()[0].name
 
             # Create attributes to store realtime usage data for verifier models
-            self.custom_verifier_data[mdl_name] = {
-                "features": {
-                    "positive": deque(maxlen=1000),
-                    "negative": deque(maxlen=1000)
+            usage_data = {
+                    "features": {
+                        "positive": deque(maxlen=1000),
+                        "negative": deque(maxlen=2000)
+                    }
                 }
-            }
+            if self.model_outputs[mdl_name] == 1:
+                self.custom_verifier_data[mdl_name] = usage_data
+            else:
+                for cls in self.class_mapping[mdl_name].values():
+                    self.custom_verifier_data[cls] = usage_data
 
             # Create filesystem cache locations, or load existing data in the cache
             if cache_directory == "":
@@ -140,6 +147,7 @@ class Model():
                 self.cache_dir = cache_directory
             if not os.path.exists(self.cache_dir):
                 os.mkdir(self.cache_dir)
+                os.mkdir(os.path.join(self.cache_dir, "activation_clips"))
             else:
                 if os.path.exists(os.path.join(self.cache_dir, "cached_features.pkl")):
                     # Load existing data in the cache
@@ -284,7 +292,6 @@ class Model():
                         self.custom_verifier_data[cls]["features"]["negative"].append(frame_features.flatten())
 
                     # Update scores of positive predictions
-                    positive_examples_added = False
                     if predictions[cls] >= self.custom_verifier_threshold:
                         parent_model = self.get_parent_model_from_label(cls)
                         if self.custom_verifier_models.get(parent_model, False):
@@ -295,35 +302,52 @@ class Model():
                                 )[0][-1]
                                 predictions[cls] = verifier_prediction
 
-                            # Update data cache for verifier models
-                            if self.custom_verifier_model_online_learning and predictions[cls] >= self.custom_verifier_threshold:
+                            # Update data cache for verifier models only on predictions with two or more sequential
+                            # frames with scores above the threshold
+                            if self.custom_verifier_model_online_learning and predictions[cls] >= self.custom_verifier_threshold and \
+                               self.prediction_buffer[cls][-1] >= self.custom_verifier_threshold:
                                 self.custom_verifier_data[cls]["features"]["positive"].append(frame_features.flatten())
-                                positive_examples_added = True
 
-                                # Save feature data to cache
+                            # Save feature data to cache after activation has finished
+                            if (np.array(self.prediction_buffer[cls])[-3:] > self.custom_verifier_threshold).sum() == 0:
                                 pickle.dump(self.custom_verifier_data, open(os.path.join(self.cache_dir, "cached_features.pkl"), 'wb'))
 
-                    # Train verifier model on latest data at most every 10 seconds or after every positive detection
+                                # Save audio clip of activation (last 4 seconds)
+                                raw_data = np.array(list(self.preprocessor.raw_data_buffer)[-16000*4:]).astype(np.int16)
+                                soundfile.write(os.path.join(self.cache_dir, "activation_clips", f"{cls}_{uuid.uuid4().hex[0:6]}.ogg"),
+                                                raw_data, 16000)
+
+                    # Train verifier model on latest data at most every 60 seconds and only if there are enough positive clips
                     if self.custom_verifier_model_online_learning and \
-                       (self.samples_processed >= 16000*10 or positive_examples_added):
+                       self.samples_processed >= 16000*60 and \
+                       len(self.custom_verifier_data[cls]["features"]["positive"]) >= 3:
                         self.samples_processed = 0
                         parent_model = self.get_parent_model_from_label(cls)
+                        # y = np.array(
+                        #     [1]*np.array(self.custom_verifier_data[cls]["features"]["positive"]).shape[0] +
+                        #     [0]*np.array(self.custom_verifier_data[cls]["features"]["negative"]).shape[0]
+                        # )
+
                         y = np.array(
                             [1]*np.array(self.custom_verifier_data[cls]["features"]["positive"]).shape[0] +
-                            [0]*np.array(self.custom_verifier_data[cls]["features"]["negative"]).shape[0]
+                            [0]*np.array(self.custom_verifier_data[cls]["features"]["positive"]).shape[0]*2
                         )
 
-                        # need a minimum number of examples to train (5)
-                        if len(self.custom_verifier_data[cls]["features"]["positive"]) > 3 and \
-                           len(self.custom_verifier_data[cls]["features"]["negative"]) > 5:
+                        # need a minimum number of negative examples to train
+                        if len(self.custom_verifier_data[cls]["features"]["negative"]) > len(self.custom_verifier_data[cls]["features"]["positive"]):
                             print("Updating custom verifier model")
+                            random_ndcs = np.random.randint(
+                                0, len(self.custom_verifier_data[cls]["features"]["negative"]) - len(self.custom_verifier_data[cls]["features"]["positive"]) - 1,
+                                len(self.custom_verifier_data[cls]["features"]["positive"]))
+
                             x = np.vstack((
                                 np.array(self.custom_verifier_data[cls]["features"]["positive"]),
-                                np.array(self.custom_verifier_data[cls]["features"]["negative"]),
+                                np.array(self.custom_verifier_data[cls]["features"]["negative"])[random_ndcs, :],
+                                np.array(self.custom_verifier_data[cls]["features"]["negative"])[-len(random_ndcs):, :]
                             ))
                             self.custom_verifier_models[parent_model].fit(x, y)
 
-                            print("Accuracy: ", sum(y == self.custom_verifier_models[parent_model].predict(x))/len(x))
+                            # print("Accuracy: ", sum(y == self.custom_verifier_models[parent_model].predict(x))/len(x))
 
             # Update prediction buffer, and zero predictions for first 5 frames during model initialization
             for cls in predictions.keys():

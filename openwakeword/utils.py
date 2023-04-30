@@ -306,11 +306,11 @@ class AudioFeatures():
         self._buffer_raw_data(x)
         self.accumulated_samples += len(x)
 
-        # Only calculate melspectrogram every ~0.5 seconds to significantly increase efficiency
+        # Calculate melspectrograms
         if self.accumulated_samples >= 1280:
             self._streaming_melspectrogram(self.accumulated_samples)
 
-            # Calculate new audio embeddings/features based on update melspectrograms
+            # Calculate new audio embeddings/features based on updated melspectrograms
             for i in np.arange(self.accumulated_samples//1280-1, -1, -1):
                 ndx = -8*i
                 ndx = ndx if ndx != 0 else len(self.melspectrogram_buffer)
