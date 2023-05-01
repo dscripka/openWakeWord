@@ -47,7 +47,10 @@ class Model():
 
         Args:
             wakeword_model_paths (List[str]): A list of paths of ONNX models to load into the openWakeWord model object.
-                                              If not provided, will load all of the pre-trained models.
+                                              If not provided, will try load wakeword_model_names.
+            wakeword_model_names (List[str]): A list of pre-trained openWakeWord model names to load.
+                                              If neither wakeword_model_paths or wakeword_model_names is
+                                              provided, will load all of the pre-trained models.
             class_mapping_dicts (List[dict]): A list of dictionaries with integer to string class mappings for
                                               each model in the `wakeword_model_paths` arguments
                                               (e.g., {"0": "class_1", "1": "class_2"})
@@ -78,12 +81,24 @@ class Model():
         sessionOptions.inter_op_num_threads = 1
         sessionOptions.intra_op_num_threads = 1
 
-        # Get model paths for pre-trained models if user doesn't provide models to load
-        if wakeword_model_paths == []:
+        if wakeword_model_paths:
+            wakeword_model_names = [
+                os.path.basename(i[0:-5]) for i in wakeword_model_paths
+            ]
+        elif wakeword_model_names:
+            wakeword_model_paths = []
+            for model_name in wakeword_model_names:
+                try:
+                    wakeword_model_paths.append(
+                        openwakeword.models[model_name]["model_path"]
+                    )
+                except KeyError:
+                    print(f"Error: No model named {model_name}")
+                    wakeword_model_names.remove(model_name)
+        else:
+            # Get model paths for pre-trained models if user doesn't provide models to load
             wakeword_model_paths = openwakeword.get_pretrained_model_paths()
             wakeword_model_names = list(openwakeword.models.keys())
-        else:
-            wakeword_model_names = [os.path.basename(i[0:-5]) for i in wakeword_model_paths]
 
         # Create attributes to store models and metadata
         self.models = {}
