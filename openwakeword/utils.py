@@ -14,7 +14,12 @@
 
 # Imports
 import os
-import onnxruntime as ort
+try:
+    import tflite_runtime.interpreter as tflite
+    INFERENCE_FRAMEWORK = "tflite"
+except ImportError:
+    import onnxruntime as ort
+    INFERENCE_FRAMEWORK = "onnx"
 import numpy as np
 import pathlib
 from collections import deque
@@ -33,35 +38,86 @@ class AudioFeatures():
     `speech_embedding` features.
     """
     def __init__(self,
-                 melspec_onnx_model_path: str = os.path.join(
+                 melspec_model_path: str = os.path.join(
                                                             pathlib.Path(__file__).parent.resolve(),
                                                             "resources", "models", "melspectrogram.onnx"
                  ),
-                 embedding_onnx_model_path: str = os.path.join(
+                 embedding_model_path: str = os.path.join(
                                                                 pathlib.Path(__file__).parent.resolve(),
                                                                 "resources", "models", "embedding_model.onnx"
                  ),
                  sr: int = 16000,
-                 ncpu: int = 1
+                 ncpu: int = 1,
+                 inference_framework: str = "tflite"
                  ):
         """
         Initialize the AudioFeatures object.
 
         Args:
-            melspec_onnx_model_path (str): The path to the ONNX model for computing melspectograms from audio data
-            embedding_onnx_model_path (str): The path to the ONNX model for Google's `speech_embedding` model
+            melspec_model_path (str): The path to the model for computing melspectograms from audio data
+            embedding_model_path (str): The path to the model for Google's `speech_embedding` model
             sr (int): The sample rate of the audio (default: 16000 khz)
             ncpu (int): The number of CPUs to use when computing melspectrograms and audio features (default: 1)
+            inference_framework (str): The inference framework to use when for model prediction. Options are 
+                                       "tflite" or "onnx". The default is "tflite" as this results in better
+                                       efficiency on common platforms (x86, ARM64), but in some deployment
+                                       scenarios ONNX models may be preferable.
         """
-        # Initialize the ONNX models
-        sessionOptions = ort.SessionOptions()
-        sessionOptions.inter_op_num_threads = ncpu
-        sessionOptions.intra_op_num_threads = ncpu
-        self.melspec_model = ort.InferenceSession(melspec_onnx_model_path, sess_options=sessionOptions,
-                                                  providers=["CUDAExecutionProvider", "CPUExecutionProvider"])
-        self.embedding_model = ort.InferenceSession(embedding_onnx_model_path, sess_options=sessionOptions,
+        # Initialize the models
+        if INFERENCE_FRAMEWORK == "onnx":
+
+            if melspec_model_path == "":
+                melspec_model_path = os.path.join(pathlib.Path(__file__).parent.resolve(), "resources", "models", "melspectrogram.onnx")
+            if embedding_model_path == "":
+                embedding_model_path = os.path.join(pathlib.Path(__file__).parent.resolve(), "resources", "models", "embedding_model.onnx")
+
+            if ".tflite" in melspec_model_path or ".tflite" in embedding_model_path:
+                raise ValueError("The onnx inference framework is selected, but tflite models were provided!")
+            
+            # Initialize ONNX options
+            sessionOptions = ort.SessionOptions()
+            sessionOptions.inter_op_num_threads = ncpu
+            sessionOptions.intra_op_num_threads = ncpu
+
+            # Melspectrogram model
+            self.melspec_model = ort.InferenceSession(melspec_model_path, sess_options=sessionOptions,
                                                     providers=["CUDAExecutionProvider", "CPUExecutionProvider"])
-        self.onnx_execution_provider = self.melspec_model.get_providers()[0]
+            self.onnx_execution_provider = self.melspec_model.get_providers()[0]
+            self.melspec_model_predict = lambda x: self.melspec_model.run(None, {'input': x})
+
+            # Audio embedding model
+            self.embedding_model = ort.InferenceSession(embedding_model_path, sess_options=sessionOptions,
+                                                        providers=["CUDAExecutionProvider", "CPUExecutionProvider"])
+            self.embedding_model_predict = lambda x: self.embedding_model.run(None, {'input_1': x})[0].squeeze()
+
+        elif INFERENCE_FRAMEWORK == "tflite":
+
+            if melspec_model_path == "":
+                melspec_model_path = os.path.join(pathlib.Path(__file__).parent.resolve(), "resources", "models", "melspectrogram.tflite")
+            if embedding_model_path == "":
+                embedding_model_path = os.path.join(pathlib.Path(__file__).parent.resolve(), "resources", "models", "embedding_model.tflite")
+
+            if ".onnx" in melspec_model_path or ".onnx" in embedding_model_path:
+                raise ValueError("The tflite inference framework is selected, but onnx models were provided!")
+
+            # Melspectrogram model
+            self.melspec_model = tflite.Interpreter(model_path=melspec_model_path, num_threads=ncpu)
+            self.melspec_model.resize_tensor_input(0, [1, 1280], strict=True) # initialize with fixed input size
+            self.melspec_model.allocate_tensors()
+
+            self.tflite_input_details = self.melspec_model.get_input_details()
+            self.tflite_output_details = self.melspec_model.get_output_details()
+
+            self.melspec_model_predict = lambda x: self.melspec_model.set_tensor(self.tflite_input_details[0]['index'], x)
+
+            # Audio embedding model
+            self.embedding_model = tflite.Interpreter(model_path=embedding_model_path, num_threads=ncpu)
+            self.embedding_model.allocate_tensors()
+
+            self.tflite_input_details = self.embedding_model.get_input_details()
+            self.tflite_output_details = self.embedding_model.get_output_details()
+
+            self.embedding_model_predict = lambda x: self.embedding_model.set_tensor(self.tflite_input_details[0]['index'], x)[0].squeeze()
 
         # Create databuffers
         self.raw_data_buffer: Deque = deque(maxlen=sr*10)
@@ -93,7 +149,7 @@ class AudioFeatures():
         x = x.astype(np.float32) if x.dtype != np.float32 else x
 
         # Get melspectrogram
-        outputs = self.melspec_model.run(None, {'input': x})
+        outputs = self.melspec_model_predict(x)
         spec = np.squeeze(outputs[0])
 
         # Arbitrary transform of melspectrogram
@@ -113,7 +169,7 @@ class AudioFeatures():
         """
         if melspec.shape[0] != 1:
             melspec = melspec[None, ]
-        embedding = self.embedding_model.run(None, {'input_1': melspec})[0].squeeze()
+        embedding = self.embedding_model_predict(melspec)
         return embedding
 
     def _get_embeddings(self, x: np.ndarray, window_size: int = 76, step_size: int = 8, **kwargs):
@@ -126,7 +182,7 @@ class AudioFeatures():
                 windows.append(window)
 
         batch = np.expand_dims(np.array(windows), axis=-1).astype(np.float32)
-        embedding = self.embedding_model.run(None, {'input_1': batch})[0].squeeze()
+        embedding = self.embedding_model_predict(batch)
         return embedding
 
     def get_embedding_shape(self, audio_length: float, sr: int = 16000):
@@ -229,7 +285,7 @@ class AudioFeatures():
             if len(batch) >= batch_size or ndx+1 == x.shape[0]:
                 batch = np.array(batch).astype(np.float32)
                 if "CUDA" in self.onnx_execution_provider:
-                    result = self.embedding_model.run(None, {'input_1': batch})[0].squeeze()
+                    result = self.embedding_model_predict(batch)
 
                 elif pool:
                     result = np.array(pool.map(self._get_embeddings_from_melspec,
@@ -317,7 +373,7 @@ class AudioFeatures():
                 x = self.melspectrogram_buffer[-76 + ndx:ndx].astype(np.float32)[None, :, :, None]
                 if x.shape[1] == 76:
                     self.feature_buffer = np.vstack((self.feature_buffer,
-                                                    self.embedding_model.run(None, {'input_1': x})[0].squeeze()))
+                                                    self.embedding_model_predict(x)))
 
             # Reset raw data buffer counter
             self.accumulated_samples = 0
