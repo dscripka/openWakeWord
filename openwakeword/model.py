@@ -14,7 +14,6 @@
 
 # Imports
 import numpy as np
-import onnxruntime as ort
 import openwakeword
 from openwakeword.utils import AudioFeatures
 
@@ -41,13 +40,15 @@ class Model():
             vad_threshold: float = 0,
             custom_verifier_models: dict = {},
             custom_verifier_threshold: float = 0.1,
+            inference_framework: str = "tflite",
             **kwargs
             ):
         """Initialize the openWakeWord model object.
 
         Args:
             wakeword_model_paths (List[str]): A list of paths of ONNX models to load into the openWakeWord model object.
-                                              If not provided, will load all of the pre-trained models.
+                                              If not provided, will load all of the pre-trained models. Alternatively,
+                                              names of pre-trained models can be provided.
             class_mapping_dicts (List[dict]): A list of dictionaries with integer to string class mappings for
                                               each model in the `wakeword_model_paths` arguments
                                               (e.g., {"0": "class_1", "1": "class_2"})
@@ -70,42 +71,96 @@ class Model():
                                                from a model for a given frame is greater than this value, the
                                                associated custom verifier model will also predict on that frame, and
                                                the verifier score will be returned.
+            inference_framework (str): The inference framework to use when for model prediction. Options are 
+                                       "tflite" or "onnx". The default is "tflite" as this results in better
+                                       efficiency on common platforms (x86, ARM64), but in some deployment
+                                       scenarios ONNX models may be preferable.
             kwargs (dict): Any other keyword arguments to pass the the preprocessor instance
         """
-
-        # Initialize the ONNX models and store them
-        sessionOptions = ort.SessionOptions()
-        sessionOptions.inter_op_num_threads = 1
-        sessionOptions.intra_op_num_threads = 1
-
         # Get model paths for pre-trained models if user doesn't provide models to load
+        pretrained_model_paths = openwakeword.get_pretrained_model_paths()
+        wakeword_model_names = []
         if wakeword_model_paths == []:
-            wakeword_model_paths = openwakeword.get_pretrained_model_paths()
+            wakeword_model_paths = pretrained_model_paths
             wakeword_model_names = list(openwakeword.models.keys())
-        else:
-            wakeword_model_names = [os.path.basename(i[0:-5]) for i in wakeword_model_paths]
+        elif len(wakeword_model_paths) >= 1:
+            for ndx, i in enumerate(wakeword_model_paths):
+                if os.path.exists(i):
+                    wakeword_model_names.append(os.path.splitext(os.path.basename(i))[0])
+                else:
+                    # Find pre-trained path by modelname
+                    matching_model = [j for j in pretrained_model_paths if i.replace(" ", "_") in j.split(os.path.sep)[-1]]
+                    if matching_model == []:
+                        raise ValueError("Could not find pretrained model for model name {}".format(i))
+                    else:
+                        wakeword_model_paths[ndx] = matching_model[0]
+                        wakeword_model_names.append(matching_model.split(os.path.sep)[-1])
 
         # Create attributes to store models and metadata
         self.models = {}
         self.model_inputs = {}
         self.model_outputs = {}
+        self.model_prediction_function = {}
         self.class_mapping = {}
         self.model_input_names = {}
         self.custom_verifier_models = {}
         self.custom_verifier_threshold = custom_verifier_threshold
+
+        # Do imports for  inference framework
+        if inference_framework == "onnx":
+            try:
+                import onnxruntime as ort
+            except ImportError:
+                raise ValueError("Tried to import the onnx runtime, but it was not found. Please install it using `pip install onnxruntime`")
+        if inference_framework == "tflite":
+            try:
+                import tflite_runtime.interpreter as tflite
+            except ImportError:
+                raise ValueError("Tried to import the TFLite runtime, but it was not found. Please install it using `pip install tflite-runtime`")
+
         for mdl_path, mdl_name in zip(wakeword_model_paths, wakeword_model_names):
             # Load openwakeword models
-            self.models[mdl_name] = ort.InferenceSession(mdl_path, sess_options=sessionOptions,
-                                                         providers=["CPUExecutionProvider"])
-            self.model_inputs[mdl_name] = self.models[mdl_name].get_inputs()[0].shape[1]
-            self.model_outputs[mdl_name] = self.models[mdl_name].get_outputs()[0].shape[1]
+            if inference_framework == "onnx":
+                if ".tflite" in mdl_path:
+                    raise ValueError("The onnx inference framework is selected, but tflite models were provided!")
+
+                sessionOptions = ort.SessionOptions()
+                sessionOptions.inter_op_num_threads = 1
+                sessionOptions.intra_op_num_threads = 1
+
+                self.models[mdl_name] = ort.InferenceSession(mdl_path, sess_options=sessionOptions,
+                                                            providers=["CPUExecutionProvider"])
+
+                self.model_inputs[mdl_name] = self.models[mdl_name].get_inputs()[0].shape[1]
+                self.model_outputs[mdl_name] = self.models[mdl_name].get_outputs()[0].shape[1]
+                self.model_prediction_function[mdl_name] = lambda x: self.models[mdl_name].run(None, {self.models[mdl_name].get_inputs()[0].name: x})
+            
+            if inference_framework == "tflite":
+                if ".onnx" in mdl_path:
+                    raise ValueError("The tflite inference framework is selected, but onnx models were provided!")
+
+                self.models[mdl_name] = tflite.Interpreter(model_path=mdl_path, num_threads=1)
+                self.models[mdl_name].allocate_tensors()
+
+                self.model_inputs[mdl_name] = self.models[mdl_name].get_input_details()[0]['shape'][1]
+                self.model_outputs[mdl_name] = self.models[mdl_name].get_output_details()[0]['shape'][1]
+
+                tflite_input_index = self.models[mdl_name].get_input_details()[0]['index']
+                tflite_output_index = self.models[mdl_name].get_output_details()[0]['index']
+
+                def tflite_predict(x):
+                    self.models[mdl_name].set_tensor(tflite_input_index, x)
+                    self.models[mdl_name].invoke()
+                    return self.models[mdl_name].get_tensor(tflite_output_index)[None,]
+
+                self.model_prediction_function[mdl_name] = tflite_predict
+
             if class_mapping_dicts and class_mapping_dicts[wakeword_model_paths.index(mdl_path)].get(mdl_name, None):
                 self.class_mapping[mdl_name] = class_mapping_dicts[wakeword_model_paths.index(mdl_path)]
             elif openwakeword.model_class_mappings.get(mdl_name, None):
                 self.class_mapping[mdl_name] = openwakeword.model_class_mappings[mdl_name]
             else:
                 self.class_mapping[mdl_name] = {str(i): str(i) for i in range(0, self.model_outputs[mdl_name])}
-            self.model_input_names[mdl_name] = self.models[mdl_name].get_inputs()[0].name
 
             # Load custom verifier models
             if isinstance(custom_verifier_models, dict):
@@ -136,7 +191,7 @@ class Model():
             self.vad = openwakeword.VAD()
 
         # Create AudioFeatures object
-        self.preprocessor = AudioFeatures(**kwargs)
+        self.preprocessor = AudioFeatures(inference_framework=inference_framework, **kwargs)
 
     def get_parent_model_from_label(self, label):
         """Gets the parent model associated with a given prediction label"""
@@ -196,8 +251,6 @@ class Model():
         # Get predictions from model(s)
         predictions = {}
         for mdl in self.models.keys():
-            input_name = self.model_input_names[mdl]
-
             if timing:
                 model_start = time.time()
 
@@ -205,21 +258,31 @@ class Model():
             if len(x) > 1280:
                 group_predictions = []
                 for i in np.arange(len(x)//1280-1, -1, -1):
+                    # group_predictions.extend(
+                    #     self.models[mdl].run(
+                    #         None,
+                    #         {input_name: self.preprocessor.get_features(
+                    #                 self.model_inputs[mdl],
+                    #                 start_ndx=-self.model_inputs[mdl] - i
+                    #         )}
+                    #     )
                     group_predictions.extend(
-                        self.models[mdl].run(
-                            None,
-                            {input_name: self.preprocessor.get_features(
+                        self.model_prediction_function[mdl](
+                            self.preprocessor.get_features(
                                     self.model_inputs[mdl],
                                     start_ndx=-self.model_inputs[mdl] - i
-                            )}
+                            )
                         )
                     )
                 prediction = np.array(group_predictions).max(axis=0)[None, ]
             else:
-                prediction = self.models[mdl].run(
-                                        None,
-                                        {input_name: self.preprocessor.get_features(self.model_inputs[mdl])}
-                                    )
+                # prediction = self.models[mdl].run(
+                #                         None,
+                #                         {input_name: self.preprocessor.get_features(self.model_inputs[mdl])}
+                #                     )
+                prediction = self.model_prediction_function[mdl](
+                    self.preprocessor.get_features(self.model_inputs[mdl])
+                )
 
             if self.model_outputs[mdl] == 1:
                 predictions[mdl] = prediction[0][0][0]

@@ -38,17 +38,12 @@ class AudioFeatures():
     `speech_embedding` features.
     """
     def __init__(self,
-                 melspec_model_path: str = os.path.join(
-                                                            pathlib.Path(__file__).parent.resolve(),
-                                                            "resources", "models", "melspectrogram.onnx"
-                 ),
-                 embedding_model_path: str = os.path.join(
-                                                                pathlib.Path(__file__).parent.resolve(),
-                                                                "resources", "models", "embedding_model.onnx"
-                 ),
+                 melspec_model_path: str = "",
+                 embedding_model_path: str = "",
                  sr: int = 16000,
                  ncpu: int = 1,
-                 inference_framework: str = "tflite"
+                 inference_framework: str = "onnx",
+                 device: str = 'cpu'
                  ):
         """
         Initialize the AudioFeatures object.
@@ -62,9 +57,18 @@ class AudioFeatures():
                                        "tflite" or "onnx". The default is "tflite" as this results in better
                                        efficiency on common platforms (x86, ARM64), but in some deployment
                                        scenarios ONNX models may be preferable.
+            device (str): The device to use when running the models, either "cpu" or "gpu" (default is "cpu".)
+                          Note that depending on the inference framework selected and system configuration,
+                          this setting may not have an effect. For example, to use a GPU with the ONNX
+                          framework the appropriate onnxruntime package must be installed.
         """
-        # Initialize the models
-        if INFERENCE_FRAMEWORK == "onnx":
+        # Initialize the models with the appropriate framework
+        if inference_framework == "onnx":
+            try:
+                import onnxruntime as ort
+            except ImportError:
+                raise ValueError("Tried to import the onnx runtime, but it was not found. Please install it using `pip install onnxruntime`")
+
 
             if melspec_model_path == "":
                 melspec_model_path = os.path.join(pathlib.Path(__file__).parent.resolve(), "resources", "models", "melspectrogram.onnx")
@@ -81,16 +85,20 @@ class AudioFeatures():
 
             # Melspectrogram model
             self.melspec_model = ort.InferenceSession(melspec_model_path, sess_options=sessionOptions,
-                                                    providers=["CUDAExecutionProvider", "CPUExecutionProvider"])
+                                                    providers=["CUDAExecutionProvider"] if device=="gpu" else ["CPUExecutionProvider"])
             self.onnx_execution_provider = self.melspec_model.get_providers()[0]
             self.melspec_model_predict = lambda x: self.melspec_model.run(None, {'input': x})
 
             # Audio embedding model
             self.embedding_model = ort.InferenceSession(embedding_model_path, sess_options=sessionOptions,
-                                                        providers=["CUDAExecutionProvider", "CPUExecutionProvider"])
+                                                        providers=["CUDAExecutionProvider"] if device=="gpu" else ["CPUExecutionProvider"])
             self.embedding_model_predict = lambda x: self.embedding_model.run(None, {'input_1': x})[0].squeeze()
 
-        elif INFERENCE_FRAMEWORK == "tflite":
+        elif inference_framework == "tflite":
+            try:
+                import tflite_runtime.interpreter as tflite
+            except ImportError:
+                raise ValueError("Tried to import the TFLite runtime, but it was not found. Please install it using `pip install tflite-runtime`")
 
             if melspec_model_path == "":
                 melspec_model_path = os.path.join(pathlib.Path(__file__).parent.resolve(), "resources", "models", "melspectrogram.tflite")
@@ -105,26 +113,57 @@ class AudioFeatures():
             self.melspec_model.resize_tensor_input(0, [1, 1280], strict=True) # initialize with fixed input size
             self.melspec_model.allocate_tensors()
 
-            self.tflite_input_details = self.melspec_model.get_input_details()
-            self.tflite_output_details = self.melspec_model.get_output_details()
+            melspec_input_index = self.melspec_model.get_input_details()[0]['index']
+            melspec_output_index = self.melspec_model.get_output_details()[0]['index']
 
-            self.melspec_model_predict = lambda x: self.melspec_model.set_tensor(self.tflite_input_details[0]['index'], x)
+            self._tflite_current_melspec_input_size = 1280
+            def tflite_melspec_predict(x):
+                if x.shape[1] != 1280:
+                    self.melspec_model.resize_tensor_input(0, [1, x.shape[1]], strict=True) # initialize with fixed input size
+                    self.melspec_model.allocate_tensors()
+                    self._tflite_current_melspec_input_size = x.shape[1]
+                elif self._tflite_current_melspec_input_size != 1280:
+                    self.melspec_model.resize_tensor_input(0, [1, 1280], strict=True) # initialize with fixed input size
+                    self.melspec_model.allocate_tensors()
+                    self._tflite_current_melspec_input_size = 1280
+
+                self.melspec_model.set_tensor(melspec_input_index, x)
+                self.melspec_model.invoke()
+                return self.melspec_model.get_tensor(melspec_output_index)
+
+            self.melspec_model_predict = tflite_melspec_predict
 
             # Audio embedding model
             self.embedding_model = tflite.Interpreter(model_path=embedding_model_path, num_threads=ncpu)
             self.embedding_model.allocate_tensors()
 
-            self.tflite_input_details = self.embedding_model.get_input_details()
-            self.tflite_output_details = self.embedding_model.get_output_details()
+            embedding_input_index = self.embedding_model.get_input_details()[0]['index']
+            embedding_output_index = self.embedding_model.get_output_details()[0]['index']
 
-            self.embedding_model_predict = lambda x: self.embedding_model.set_tensor(self.tflite_input_details[0]['index'], x)[0].squeeze()
+            self._tflite_current_embedding_batch_size = 1
+            def tflite_embedding_predict(x):
+                if x.shape[0] != 1:
+                    self.embedding_model.resize_tensor_input(0, [x.shape[0], 76, 32, 1], strict=True) # initialize with fixed input size
+                    self.embedding_model.allocate_tensors()
+                    self._tflite_current_embedding_batch_size = x.shape[0]
+                elif self._tflite_current_embedding_batch_size != 1:
+                    self.embedding_model.resize_tensor_input(0, [1, 76, 32, 1], strict=True) # initialize with fixed input size
+                    self.embedding_model.allocate_tensors()
+                    self._tflite_current_embedding_batch_size = x.shape[0]             
+
+                self.embedding_model.set_tensor(embedding_input_index, x)
+                self.embedding_model.invoke()
+                return self.embedding_model.get_tensor(embedding_output_index).squeeze()
+
+            self.embedding_model_predict = tflite_embedding_predict
 
         # Create databuffers
         self.raw_data_buffer: Deque = deque(maxlen=sr*10)
         self.melspectrogram_buffer = np.ones((76, 32))  # n_frames x num_features
         self.melspectrogram_max_len = 10*97  # 97 is the number of frames in 1 second of 16hz audio
         self.accumulated_samples = 0  # the samples added to the buffer since the audio preprocessor was last called
-        self.feature_buffer = self._get_embeddings(np.zeros(160000).astype(np.int16))  # fill with blank data to start
+        # self.feature_buffer = np.vstack([self._get_embeddings(np.random.randint(-1000, 1000, 1280).astype(np.int16)) for _ in range(10)])
+        self.feature_buffer = self._get_embeddings(np.random.randint(-1000,1000, 16000*4).astype(np.int16))
         self.feature_buffer_max_len = 120  # ~10 seconds of feature buffer history
 
     def _get_melspectrogram(self, x: Union[np.ndarray, List], melspec_transform: Callable = lambda x: x/10 + 2):
@@ -362,7 +401,7 @@ class AudioFeatures():
         self._buffer_raw_data(x)
         self.accumulated_samples += len(x)
 
-        # Only calculate melspectrogram every ~0.5 seconds to significantly increase efficiency
+        # Only calculate melspectrogram once minimum samples area accumulated
         if self.accumulated_samples >= 1280:
             self._streaming_melspectrogram(self.accumulated_samples)
 
