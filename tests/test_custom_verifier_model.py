@@ -69,20 +69,21 @@ class TestModels:
                 positive_reference_clips=reference_clips,
                 negative_reference_clips=negative_clips,
                 output_path=os.path.join(tmp_dir, 'verifier_model.pkl'),
-                model_name=os.path.join("openwakeword", "resources", "models", "hey_mycroft_v0.1.onnx")
+                model_name=os.path.join("openwakeword", "resources", "models", "hey_mycroft_v0.1.tflite")
             )
 
             with pytest.raises(ValueError):
                 # Load model with verifier model incorrectly to catch ValueError
                 owwModel = openwakeword.Model(
-                    wakeword_model_paths=[os.path.join("openwakeword", "resources", "models", "hey_mycroft_v0.1.onnx")],
+                    wakeword_models=[os.path.join("openwakeword", "resources",
+                                     "models", "hey_mycroft_v0.1.tflite")],
                     custom_verifier_models={"bad_key": os.path.join(tmp_dir, "verifier_model.pkl")},
                     custom_verifier_threshold=0.3,
                 )
 
             # Load model with verifier model incorrectly to catch ValueError
             owwModel = openwakeword.Model(
-                wakeword_model_paths=[os.path.join("openwakeword", "resources", "models", "hey_mycroft_v0.1.onnx")],
+                wakeword_models=[os.path.join("openwakeword", "resources", "models", "hey_mycroft_v0.1.tflite")],
                 custom_verifier_models={"hey_mycroft_v0.1": os.path.join(tmp_dir, "verifier_model.pkl")},
                 custom_verifier_threshold=0.3,
             )

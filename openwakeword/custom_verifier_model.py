@@ -139,10 +139,10 @@ def train_custom_verifier(
     # Load target openWakeWord model
     if os.path.exists(model_name):
         oww = openwakeword.Model(
-            wakeword_model_paths=[model_name],
+            wakeword_models=[model_name],
             **kwargs
         )
-        model_name = model_name.split(os.path.sep)[-1][0:-5]
+        model_name = os.path.splitext(model_name)[0].split(os.path.sep)[-1]
     else:
         oww = openwakeword.Model(**kwargs)
 
