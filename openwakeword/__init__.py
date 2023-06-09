@@ -35,7 +35,7 @@ model_class_mappings = {
 }
 
 
-def get_pretrained_model_paths(inference_framework):
+def get_pretrained_model_paths(inference_framework="tflite"):
     if inference_framework == "tflite":
         return [models[i]["model_path"] for i in models.keys()]
     elif inference_framework == "onnx":
