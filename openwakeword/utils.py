@@ -20,6 +20,7 @@ from collections import deque
 from multiprocessing.pool import ThreadPool
 from multiprocessing import Process, Queue
 import time
+import logging
 import openwakeword
 from typing import Union, List, Callable, Deque
 
@@ -499,3 +500,18 @@ def bulk_predict(
 
     # Consolidate results and return
     return {list(i.keys())[0]: list(i.values())[0] for i in results}
+
+
+# Handle deprecated arguments and naming (thanks to https://stackoverflow.com/a/74564394)
+def re_arg(kwarg_map):
+    def decorator(func):
+        def wrapped(*args, **kwargs):
+            new_kwargs = {}
+            for k, v in kwargs.items():
+                if k in kwarg_map:
+                    logging.warning(f"DEPRECATION: keyword argument '{k}' is no longer valid and "
+                                    f"will be removed in future releases. Use '{kwarg_map[k]}' instead.")
+                new_kwargs[kwarg_map.get(k, k)] = v
+            return func(*args, **new_kwargs)
+        return wrapped
+    return decorator

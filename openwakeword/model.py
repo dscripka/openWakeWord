@@ -15,7 +15,7 @@
 # Imports
 import numpy as np
 import openwakeword
-from openwakeword.utils import AudioFeatures
+from openwakeword.utils import AudioFeatures, re_arg
 
 import wave
 import os
@@ -33,6 +33,7 @@ class Model():
     The main model class for openWakeWord. Creates a model object with the shared audio pre-processer
     and for arbitrarily many custom wake word/wake phrase models.
     """
+    @re_arg({"wakeword_model_paths": "wakeword_models"})  # temporary handling of keyword argument change
     def __init__(
             self,
             wakeword_models: List[str] = [],
