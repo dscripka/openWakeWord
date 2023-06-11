@@ -200,9 +200,10 @@ class TestModels:
         owwModel.get_parent_model_from_label(target_model_name)
 
     def test_get_positive_prediction_frames(self):
-        owwModel = openwakeword.Model()
+        owwModel = openwakeword.Model(wakeword_models=[
+                                        os.path.join("openwakeword", "resources", "models", "alexa_v0.1.tflite")
+                                      ], inference_framework="tflite")
 
-        # Get a clip to use for the test
-        clip = [str(i) for i in Path(os.path.join("tests", "data")).glob("*.wav")][0]
+        clip = os.path.join("tests", "data", "alexa_test.wav")
         features = owwModel._get_positive_prediction_frames(clip)
         assert list(features.values())[0].shape[0] > 0
