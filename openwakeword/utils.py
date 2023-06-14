@@ -438,7 +438,7 @@ def bulk_predict(
                  wakeword_models: List[str],
                  prediction_function: str = 'predict_clip',
                  ncpu: int = 1,
-                 inference_framework = "tflite",
+                 inference_framework: str = "tflite",
                  **kwargs
                  ):
     """
