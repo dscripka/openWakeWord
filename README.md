@@ -4,19 +4,27 @@
 
 openWakeWord is an open-source wakeword library that can be used to create voice-enabled applications and interfaces. It includes pre-trained models for common words & phrases that work well in real-world environments.
 
+# Updates
+
+**2023/06/14**
+
+- v0.4.0 of openWakeWord released. See the [changelog](CHANGELOG.md) for a full descriptions of new features and changes.
+
 # Demo
 
 You can try an online demo of the included pre-trained models via HuggingFace Spaces [right here!](https://huggingface.co/spaces/davidscripka/openWakeWord).
 
 Note that real-time detection of a microphone stream can occasionally behave strangely in Spaces. For the most reliable testing, perform a local installation as described below.
 
-# Installation & Usage
+# Installation
 
 Installing openWakeWord is simple and has minimal dependencies:
 
 ```
 pip install openwakeword
 ```
+
+On Linux systems, both the [onnxruntime](https://pypi.org/project/onnxruntime/) package and [tflite-runtime](https://pypi.org/project/tflite-runtime/) packages will be installed as dependencies since both inference frameworks are supported. On Windows, only onnxruntime is installed due to a lack of support for modern versions of tflite.
 
 To (optionally) use [Speex](https://www.speex.org/) noise suppression on Linux systems to improve performance in noisy environments, install the Speex dependencies and then the pre-built Python package (see the assets [here](https://github.com/dscripka/openWakeWord/releases/tag/v0.1.1) for all .whl versions), adjusting for your python version and system architecture as needed.
 
@@ -27,6 +35,8 @@ pip install https://github.com/dscripka/openWakeWord/releases/download/v0.1.1/sp
 
 Many thanks to [TeaPoly](https://github.com/TeaPoly/speexdsp-ns-python) for their Python wrapper of the Speex noise suppression libraries.
 
+# Usage
+
 For quick local testing, clone this repository and use the included [example script](examples/detect_from_microphone.py) to try streaming detection from a local microphone. **Important note!** The model files are stored in this repo using [git-lfs](https://git-lfs.com/); make sure it is installed on your system and if needed use `git-lfs fetch --all` to make sure the the models download correctly.
 
 Adding openWakeWord to your own Python code requires just a few lines:
@@ -36,7 +46,7 @@ from openwakeword.model import Model
 
 # Instantiate the model
 model = Model(
-    wakeword_model_paths=["path/to/model.onnx"],  # can also leave this argument empty to load all of the included pre-trained models
+    wakeword_models=["path/to/model.onnx"],  # can also leave this argument empty to load all of the included pre-trained models
 )
 
 # Get audio data containing 16-bit 16khz PCM audio data from a file, microphone, network stream, etc.
@@ -47,6 +57,27 @@ frame = my_function_to_get_audio_frame()
 # Get predictions for the frame
 prediction = model.predict(frame)
 ```
+
+Additionally, openWakeWord provides other useful utility functions. For example:
+
+```python
+# Get predictions for individual WAV files (16-bit 16khz PCM)
+from openwakeword.model import Model
+
+model = Model()
+model.predict_clip("path/to/wav/file")
+
+# Get predictions for a large number of files using multiprocessing
+from openwakeword.utils import bulk_predict
+
+bulk_predict(
+    file_paths = ["path/to/wav/file/1", "path/to/wav/file/2"],
+    wakeword_models = ["hey jarvis"],
+    ncpu=2
+)
+```
+
+See `openwakeword/utils.py` and `openwakeword/model.py` for the full specification of class methods and utility functions.
 
 # Recommendations for Usage
 
@@ -91,6 +122,7 @@ The table below lists each model, examples of the word/phrases it is trained to 
 | alexa | "alexa"| [docs](docs/models/alexa.md) |
 | hey mycroft | "hey mycroft" | [docs](docs/models/hey_mycroft.md) |
 | hey jarvis | "hey jarvis" | [docs](docs/models/hey_jarvis.md) |
+| hey rhasspy | "hey rhasspy" | TBD
 | current weather | "what's the weather" | [docs](docs/models/weather.md) |
 | timers | "set a 10 minute timer" | [docs](docs/models/timers.md) |
 
@@ -186,4 +218,4 @@ Future release road maps may have non-english support. In particular, [Mycroft.A
 
 # License
 
-All of the code in openWakeWord is licensed under the **Apache 2.0** license. All of the included pre-trained models are licensed under the [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-nc-sa/4.0/) license due to the inclusion of datasets with unknown or restrictive licensing as part of the training data. If you are interested in pre-trained models with more permissive licensing, please raise an issue and we will try to add them to a future release.
+All of the code in this repository is licensed under the **Apache 2.0** license. All of the included pre-trained models are licensed under the [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-nc-sa/4.0/) license due to the inclusion of datasets with unknown or restrictive licensing as part of the training data. If you are interested in pre-trained models with more permissive licensing, please raise an issue and we will try to add them to a future release.

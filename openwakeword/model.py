@@ -277,14 +277,6 @@ class Model():
             if len(x) > 1280:
                 group_predictions = []
                 for i in np.arange(len(x)//1280-1, -1, -1):
-                    # group_predictions.extend(
-                    #     self.models[mdl].run(
-                    #         None,
-                    #         {input_name: self.preprocessor.get_features(
-                    #                 self.model_inputs[mdl],
-                    #                 start_ndx=-self.model_inputs[mdl] - i
-                    #         )}
-                    #     )
                     group_predictions.extend(
                         self.model_prediction_function[mdl](
                             self.preprocessor.get_features(
@@ -295,10 +287,6 @@ class Model():
                     )
                 prediction = np.array(group_predictions).max(axis=0)[None, ]
             else:
-                # prediction = self.models[mdl].run(
-                #                         None,
-                #                         {input_name: self.preprocessor.get_features(self.model_inputs[mdl])}
-                #                     )
                 prediction = self.model_prediction_function[mdl](
                     self.preprocessor.get_features(self.model_inputs[mdl])
                 )
