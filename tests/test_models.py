@@ -40,9 +40,13 @@ import platform
 class TestModels:
     def test_load_models_by_path(self):
         # Load model with defaults
-        owwModel = openwakeword.Model(wakeword_model_paths=[
+        owwModel = openwakeword.Model(wakeword_models=[
                                         os.path.join("openwakeword", "resources", "models", "alexa_v0.1.onnx")
-                                      ])
+                                      ], inference_framework="onnx")
+
+        owwModel = openwakeword.Model(wakeword_models=[
+                                        os.path.join("openwakeword", "resources", "models", "alexa_v0.1.tflite")
+                                      ], inference_framework="tflite")
 
         # Prediction on random data
         owwModel.predict(np.random.randint(-1000, 1000, 1280).astype(np.int16))
@@ -50,12 +54,22 @@ class TestModels:
         # Prediction on random data with different chunk size
         owwModel.predict(np.random.randint(-1000, 1000, 1280*2).astype(np.int16))
 
+    def test_load_pretrained_model_by_name(self):
+        # Load model with defaults
+        owwModel = openwakeword.Model(wakeword_models=["alexa", "hey mycroft"], inference_framework="onnx")
+
+        owwModel = openwakeword.Model(wakeword_models=["alexa", "hey mycroft"], inference_framework="tflite")
+
+        # Prediction on random data
+        owwModel.predict(np.random.randint(-1000, 1000, 1280).astype(np.int16))
+
     def test_custom_model_label_mapping_dict(self):
         # Load model with model path
-        owwModel = openwakeword.Model(wakeword_model_paths=[
+        owwModel = openwakeword.Model(wakeword_models=[
                                         os.path.join("openwakeword", "resources", "models", "alexa_v0.1.onnx")
                                       ],
-                                      class_mapping_dicts=[{"alexa_v0.1": {"0": "positive"}}]
+                                      class_mapping_dicts=[{"alexa_v0.1": {"0": "positive"}}],
+                                      inference_framework="onnx"
                                       )
 
         # Prediction on random data
@@ -186,9 +200,10 @@ class TestModels:
         owwModel.get_parent_model_from_label(target_model_name)
 
     def test_get_positive_prediction_frames(self):
-        owwModel = openwakeword.Model()
+        owwModel = openwakeword.Model(wakeword_models=[
+                                        os.path.join("openwakeword", "resources", "models", "alexa_v0.1.tflite")
+                                      ], inference_framework="tflite")
 
-        # Get a clip to use for the test
-        clip = [str(i) for i in Path(os.path.join("tests", "data")).glob("*.wav")][0]
+        clip = os.path.join("tests", "data", "alexa_test.wav")
         features = owwModel._get_positive_prediction_frames(clip)
         assert list(features.values())[0].shape[0] > 0

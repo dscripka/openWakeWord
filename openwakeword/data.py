@@ -111,7 +111,7 @@ def load_audio_clips(files, clip_size=32000):
 # Convert clips with sox
 def _convert_clip(input_file, output_file, backend="ffmpeg"):
     if backend == "sox":
-        cmd = f"sox \"{input_file}\" -G -r 16000 -c 1 \"{output_file}\""
+        cmd = f"sox \"{input_file}\" -G -r 16000 -c 1 -b 16 \"{output_file}\""
     elif backend == "ffmpeg":
         cmd = f"ffmpeg -y -i \"{input_file}\" -ar 16000 \"{output_file}\""
     os.system(cmd)

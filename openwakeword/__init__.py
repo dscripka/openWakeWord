@@ -7,19 +7,19 @@ __all__ = ['Model', 'VAD', 'train_custom_verifier']
 
 models = {
     "alexa": {
-        "model_path": os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources/models/alexa_v0.1.onnx")
+        "model_path": os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources/models/alexa_v0.1.tflite")
     },
     "hey_mycroft": {
-        "model_path": os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources/models/hey_mycroft_v0.1.onnx")
+        "model_path": os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources/models/hey_mycroft_v0.1.tflite")
     },
     "hey_jarvis": {
-        "model_path": os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources/models/hey_jarvis_v0.1.onnx")
+        "model_path": os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources/models/hey_jarvis_v0.1.tflite")
     },
     "timer": {
-        "model_path": os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources/models/timer_v0.1.onnx")
+        "model_path": os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources/models/timer_v0.1.tflite")
     },
     "weather": {
-        "model_path": os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources/models/weather_v0.1.onnx")
+        "model_path": os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources/models/weather_v0.1.tflite")
     }
 }
 
@@ -35,5 +35,8 @@ model_class_mappings = {
 }
 
 
-def get_pretrained_model_paths():
-    return [models[i]["model_path"] for i in models.keys()]
+def get_pretrained_model_paths(inference_framework="tflite"):
+    if inference_framework == "tflite":
+        return [models[i]["model_path"] for i in models.keys()]
+    elif inference_framework == "onnx":
+        return [models[i]["model_path"].replace(".tflite", ".onnx") for i in models.keys()]

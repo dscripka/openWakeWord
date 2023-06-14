@@ -27,7 +27,13 @@ def build_additional_requires():
 setuptools.setup(
     name="openwakeword",
     version="0.4.0",
-    install_requires=['onnxruntime>=1.10.0,<2', 'tqdm>=4.0,<5.0', 'scipy>=1.3,<2', 'scikit-learn>=1,<2'],
+    install_requires=[
+        'onnxruntime>=1.10.0,<2',
+        'tflite-runtime>=2.8.0,<3; platform_system == "Linux"',
+        'tqdm>=4.0,<5.0',
+        'scipy>=1.3,<2',
+        'scikit-learn>=1,<2'
+    ],
     extras_require={
         'test': [
                     'pytest>=7.2.0,<8',
