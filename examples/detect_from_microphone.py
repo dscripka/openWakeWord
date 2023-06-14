@@ -27,6 +27,20 @@ parser.add_argument(
     default=1280,
     required=True
 )
+parser.add_argument(
+    "--model_path",
+    help="The path of a specific model to load",
+    type=str,
+    default="",
+    required=False
+)
+parser.add_argument(
+    "--inference_framework",
+    help="The inference framework to use (either 'onnx' or 'tflite'",
+    type=str,
+    default='tflite',
+    required=False
+)
 
 args=parser.parse_args()
 
@@ -39,7 +53,12 @@ audio = pyaudio.PyAudio()
 mic_stream = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
 
 # Load pre-trained openwakeword models
-owwModel = Model()
+if args.model_path != "":
+    owwModel = Model(wakeword_models=[args.model_path], inference_framework=args.inference_framework)
+else:
+    owwModel = Model(inference_framework=args.inference_framework)
+
+n_models = len(owwModel.models.keys())
 
 # Run capture loop continuosly, checking for wakewords
 if __name__ == "__main__":
@@ -48,7 +67,7 @@ if __name__ == "__main__":
     print("#"*100)
     print("Listening for wakewords...")
     print("#"*100)
-    print("\n"*13)
+    print("\n"*(n_models*3))
 
     while True:
         # Get audio
@@ -73,5 +92,5 @@ if __name__ == "__main__":
             """
 
         # Print results table
-        print("\033[F"*14)
+        print("\033[F"*(4*n_models+1))
         print(output_string_header, "                             ", end='\r')

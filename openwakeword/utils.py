@@ -438,6 +438,7 @@ def bulk_predict(
                  wakeword_models: List[str],
                  prediction_function: str = 'predict_clip',
                  ncpu: int = 1,
+                 inference_framework = "tflite",
                  **kwargs
                  ):
     """
@@ -445,10 +446,14 @@ def bulk_predict(
 
     Args:
         input_paths (List[str]): The list of input file to predict
-        wakeword_model_path (List[str])): The paths to the wakeword ONNX model files
+        wakeword_models (List[str])): The paths to the wakeword model files
         prediction_function (str): The name of the method used to predict on the input audio files
                                    (default is the `predict_clip` method)
         ncpu (int): How many processes to create (up to max of available CPUs)
+        inference_framework (str): The inference framework to use when for model prediction. Options are
+                                    "tflite" or "onnx". The default is "tflite" as this results in better
+                                    efficiency on common platforms (x86, ARM64), but in some deployment
+                                    scenarios ONNX models may be preferable.
         kwargs (dict): Any other keyword arguments to pass to the model initialization or
                        specified prediction function
 
@@ -472,6 +477,7 @@ def bulk_predict(
                            if key in openwakeword.Model.__init__.__code__.co_varnames}
         oww = openwakeword.Model(
             wakeword_models=wakeword_models,
+            inference_framework=inference_framework,
             **filtered_kwargs
         )
         mdls.append(oww)
