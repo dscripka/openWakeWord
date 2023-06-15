@@ -12,7 +12,7 @@ openWakeWord is an open-source wakeword library that can be used to create voice
 # Updates
 
 **2023/06/15**
-- v0.4.0 of openWakeWord released. See the [changelog](CHANGELOG.md) for a full descriptions of new features and changes.
+- v0.5.0 of openWakeWord released. See the [changelog](CHANGELOG.md) for a full descriptions of new features and changes.
 
 # Demo
 
