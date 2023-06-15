@@ -4,10 +4,14 @@
 
 openWakeWord is an open-source wakeword library that can be used to create voice-enabled applications and interfaces. It includes pre-trained models for common words & phrases that work well in real-world environments.
 
+**Quick Links**
+- [Installation](#installation)
+- [Training New Models](#training-new-models)
+- [FAQ](#faq)
+
 # Updates
 
-**2023/06/14**
-
+**2023/06/15**
 - v0.4.0 of openWakeWord released. See the [changelog](CHANGELOG.md) for a full descriptions of new features and changes.
 
 # Demo
@@ -215,6 +219,20 @@ Fundamentally, a new model requires two data generation and collection steps:
 Currently, openWakeWord only supports English, primarily because the pre-trained text-to-speech models used to generate training data are all based on english datasets. It's likely that speech-to-text models trained on other languages would also work well, but non-english models & datasets are less commonly available.
 
 Future release road maps may have non-english support. In particular, [Mycroft.AIs Mimic 3](https://github.com/MycroftAI/mimic3-voices) TTS engine may work well to help extend some support to other languages.
+
+# FAQ
+
+**Is there a Docker container for openWakeWord?**
+- While there isn't an official Docker container, [a contributor has created one](https://github.com/dalehumby/openWakeWord-rhasspy) that works very well!
+
+**Can openWakeWord be run in a browser with javascript?**
+- While the ONNX runtime [does support javascript](https://onnxruntime.ai/docs/get-started/with-javascript.html), much of the other functionality required for openWakeWord models would need to be ported. This is not currently on the roadmap, but please open an issue/start a discussion if this feature is of particular interest.
+
+**Why are there three separate models instead of just one?**
+- Separating the models was an intentional choice to provide flexibility and optimize the efficiency of the end-to-end prediction process. For example, with separate melspectrogram, embedding, and prediction models, each one can operate on different size inputs of audio to optimize overall latency and share computations between models. It certainly is possible to make a combined model with all of the steps integrated, though, if that was a requirement of a particular use case.
+
+**I still get a large number of false activations when I use the pre-trained models, how can I reduce these?**
+- First, review the [recommendations for usage](#recommendations-for-usage) and ensure that these options do not improve overall system accuracy. Second, experiment with [custom verifier models](#user-specific-models), if possible. If neither of these approaches are helping, please open an issue with details of the deployment environment and the types of false activations that you are experiencing. We certainly appreciate feedback & requests on how to improve the base pre-trained models!
 
 # License
 
