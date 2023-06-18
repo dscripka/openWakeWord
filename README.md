@@ -222,11 +222,14 @@ Future release road maps may have non-english support. In particular, [Mycroft.A
 
 # FAQ
 
-**Is there a Docker container for openWakeWord?**
-- While there isn't an official Docker container, [a contributor has created one](https://github.com/dalehumby/openWakeWord-rhasspy) that works very well!
+**Is there a Docker implementation for openWakeWord?**
+- While there isn't an official Docker implementation, [@dalehumby](https://github.com/dalehumby) [has created one](https://github.com/dalehumby/openWakeWord-rhasspy) that works very well!
 
 **Can openWakeWord be run in a browser with javascript?**
 - While the ONNX runtime [does support javascript](https://onnxruntime.ai/docs/get-started/with-javascript.html), much of the other functionality required for openWakeWord models would need to be ported. This is not currently on the roadmap, but please open an issue/start a discussion if this feature is of particular interest.
+
+**Is there a C++ version of openWakeWord?**
+- While the ONNX runtime [also has a C++ API](https://onnxruntime.ai/docs/get-started/with-cpp.html), there isn't an official C++ implementation of the full openWakeWord library. However, [@synesthesiam](https://github.com/synesthesiam) has created a [C++ version](https://github.com/rhasspy/openWakeWord-cpp) of openWakeWord with the essential functionality implemented.
 
 **Why are there three separate models instead of just one?**
 - Separating the models was an intentional choice to provide flexibility and optimize the efficiency of the end-to-end prediction process. For example, with separate melspectrogram, embedding, and prediction models, each one can operate on different size inputs of audio to optimize overall latency and share computations between models. It certainly is possible to make a combined model with all of the steps integrated, though, if that was a requirement of a particular use case.
