@@ -15,13 +15,18 @@
 # imports
 from multiprocessing.pool import ThreadPool
 import os
+import re
+import logging
 from functools import partial
 from pathlib import Path
 import random
 from tqdm import tqdm
 from typing import List, Tuple
 import numpy as np
+import pronouncing
 import torch
+import audiomentations
+import torch_audiomentations
 from numpy.lib.format import open_memmap
 from speechbrain.dataio.dataio import read_audio
 from speechbrain.processing.signal_processing import reverberate
@@ -547,6 +552,180 @@ def apply_reverb(x, rir_files):
 
     return reverbed.numpy()
 
+# Alternate data augmentation method using audiomentations library (https://pypi.org/project/audiomentations/)
+
+def augment_clips(clip_paths: List[str],
+                  total_length: List[str],
+                  sr: int=16000,
+                  batch_size: int=128,
+                  augmentation_probabilities: dict={
+                      "SevenBandParametricEQ": 0.25,
+                      "TanhDistortion": 0.25,
+                      "PitchShift": 0.25,
+                      "BandStopFilter": 0.25,
+                      "AddColoredNoise": 0.25,
+                      "AddBackgroundNoise": 0.75,
+                      "Gain": 1.0,
+                      "RIR": 0.5
+                  },
+                  background_clip_paths: List[str] = [],
+                  RIR_paths: List[str] = []
+    ):
+    """
+    Applies audio augmentations to the specified audio clips, returning a generator that applies
+    the augmentations in batches to support very large quantities of input audio files.
+
+    The augmentations (and probabilities) are chosen from experience based on training openWakeWord models, as well
+    as for the efficiency of the augmentation. The individual probabilities of each augmentation may be adjusted
+    with the "augmentation_probabilities" argument.
+
+    Args:
+        clip_paths (List[str]) = The input audio files (as paths) to augment. Note that these should be shorter
+                                 than the "total_length" argument, else they will be truncated.
+        total_length (int): The total length of audio files (in samples) after augmentation. All input clips
+                            will be left-padded with silence to reach this size, with between 0 and 200 ms
+                            of other audio after the end of the original input clip.
+        sr (int): The sample size of the input audio files
+        batch_size (int): The number of audio files to augment at once.
+        augmentation_probabilities (dict): The individual probabilities of each augmentation. If all probabilities
+                                           are zero, the input audio files will simply be padded with silence. THe
+                                           default values are:
+
+                                            {
+                                                "SevenBandParametricEQ": 0.25,
+                                                "TanhDistortion": 0.25,
+                                                "PitchShift": 0.25,
+                                                "BandStopFilter": 0.25,
+                                                "AddColoredNoise": 0.25,
+                                                "AddBackgroundNoise": 0.75,
+                                                "Gain": 1.0,
+                                                "RIR": 0.5
+                                            }
+        
+        background_clip_paths (List[str]) = The paths to background audio files to mix with the input files
+        RIR_paths (List[str]) = The paths to room impulse response functions (RIRs) to convolve with the input files,
+                                producing a version of the input clip with different acoustic characteristics.
+
+    Returns:
+        ndarray: A batch of augmented audio clips of size (batch_size, total_length)
+    """
+
+
+    ## Define augmentations
+    
+    # First pass augmentations that can't be done as a batch
+    augment1 = audiomentations.Compose([
+        audiomentations.SevenBandParametricEQ(min_gain_db=-6, max_gain_db=6, p=augmentation_probabilities["SevenBandParametricEQ"]),
+        audiomentations.TanhDistortion(
+            min_distortion=0.0001,
+            max_distortion=0.10,
+            p=augmentation_probabilities["TanhDistortion"]
+        ),
+    ])
+
+    # Augmentations that can be done as a batch
+    if background_clip_paths != []:
+        augment2 = torch_audiomentations.Compose([
+            torch_audiomentations.PitchShift(
+                min_transpose_semitones=-3,
+                max_transpose_semitones=3,
+                p=augmentation_probabilities["PitchShift"],
+                sample_rate=16000,
+                mode="per_batch"
+            ),
+            torch_audiomentations.BandStopFilter(p=augmentation_probabilities["BandStopFilter"], mode="per_batch"),
+            torch_audiomentations.AddColoredNoise(
+                min_snr_in_db=10, max_snr_in_db=30,
+                min_f_decay=-1, max_f_decay=2, p=augmentation_probabilities["AddColoredNoise"],
+                mode="per_batch"
+            ),
+            torch_audiomentations.AddBackgroundNoise(
+                p=augmentation_probabilities["AddBackgroundNoise"],
+                background_paths=background_clip_paths,
+                min_snr_in_db=-10,
+                max_snr_in_db=15,
+                mode="per_batch"
+            ),
+            torch_audiomentations.Gain(max_gain_in_db=0, p=augmentation_probabilities["Gain"]),
+        ])
+    else:
+        augment2 = torch_audiomentations.Compose([
+            torch_audiomentations.PitchShift(
+                min_transpose_semitones=-3,
+                max_transpose_semitones=3,
+                p=augmentation_probabilities["PitchShift"],
+                sample_rate=16000,
+                mode="per_batch"
+            ),
+            torch_audiomentations.BandStopFilter(p=augmentation_probabilities["BandStopFilter"], mode="per_batch"),
+            torch_audiomentations.AddColoredNoise(
+                min_snr_in_db=10, max_snr_in_db=30,
+                min_f_decay=-1, max_f_decay=2, p=augmentation_probabilities["AddColoredNoise"],
+                mode="per_batch"
+            ),
+            torch_audiomentations.Gain(max_gain_in_db=0, p=augmentation_probabilities["Gain"]),
+        ])
+    
+    # Iterate through all clips and augment them
+    for i in range(0, len(clip_paths), batch_size):
+        batch = clip_paths[i:i+batch_size]
+        augmented_clips = []
+        for clip in batch:
+            clip_data, clip_sr = torchaudio.load(clip)
+            clip_data = clip_data[0]
+            if clip_data.shape[0] > total_length:
+                clip_data = clip_data[0:total_length]
+        
+            if clip_sr != sr:
+                raise ValueError("Error! Clip does not have the correct sample rate!")
+
+            clip_data = create_fixed_size_clip(clip_data, total_length, clip_sr)
+                
+            # Do first pass augmentations
+            augmented_clips.append(torch.from_numpy(augment1(samples=clip_data, sample_rate=sr)))
+            
+        # Do second pass augmentations
+        device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        augmented_batch = augment2(samples=torch.vstack(augmented_clips).unsqueeze(axis=1).to(device), sample_rate=sr).squeeze(axis=1)
+
+        # Do reverberation
+        if augmentation_probabilities["RIR"] >= np.random.random() and RIR_paths != []:
+            rir_waveform, sr = torchaudio.load(random.choice(RIR_paths))
+            augmented_batch = reverberate(augmented_batch.cpu(), rir_waveform, rescale_amp="avg")
+        
+        # yield batch of 16-bit PCM audio data
+        yield (augmented_batch.cpu().numpy()*32767).astype(np.int16)
+
+def create_fixed_size_clip(x, n_samples, sr=16000, start=None, end_jitter=.200):
+    """
+    Create a fixed-length clip of the specified size by padding an input clip with zeros
+    Optionally specify the start/end position of the input clip, or let it be chosen randomly.
+
+    Args:
+        x (ndarray): The input audio to pad to a fixed size
+        n_samples (int): The total number of samples for the fixed length clip
+        sr (int): The sample rate of the audio
+        start (int): The start position of the clip in the fixed length output, in samples (default: None)
+        end_jitter (float): The time (in seconds) from the end of the fixed length output
+                            that the input clip should end, if `start` is None.
+
+    Returns:
+        ndarray: A new array of audio data of the specified length
+    """
+    dat = np.zeros(n_samples)
+    end_jitter = int(np.random.uniform(0, end_jitter)*sr)
+    if start is None:
+        start = max(0, n_samples - (int(len(x))+end_jitter))
+
+    if len(x) > n_samples:
+        if np.random.random() >= 0.5:
+            dat = x[0:n_samples].numpy()
+        else:
+            dat = x[-n_samples:].numpy()
+    else:
+        dat[start:start+len(x)] = x
+    
+    return dat
 
 # Load batches of data from mmaped numpy arrays
 class mmap_batch_generator:
@@ -697,7 +876,7 @@ def trim_mmap(mmap_path):
     mmap_file2 = open_memmap(output_file2, mode='w+', dtype=np.float32,
                              shape=(N_new, mmap_file1.shape[1], mmap_file1.shape[2]))
 
-    for i in tqdm(range(0, mmap_file1.shape[0], 1024), total=mmap_file1.shape[0]//1024):
+    for i in tqdm(range(0, mmap_file1.shape[0], 1024), total=mmap_file1.shape[0]//1024, desc="Trimming empty rows"):
         if i + 1024 > N_new:
             mmap_file2[i:N_new] = mmap_file1[i:N_new].copy()
             mmap_file2.flush()
@@ -710,3 +889,105 @@ def trim_mmap(mmap_path):
 
     # Rename new mmap file to match original
     os.rename(output_file2, mmap_path)
+
+# Generate words that sound similar ("adversarial") to the input phrase using phoneme overlap
+def generate_adversarial_texts(input_text: str, N: int, include_partial_phrase: float = 0, include_input_words: float = 0):
+    """
+    Generate adversarial words and phrases based on phoneme overlap.
+    Currently only works for english texts.
+    Note that homophones are excluded, as this wouldn't actually be an adversarial example for the input text.
+    
+    Args:
+        input_text (str): The text to generate adversarial texts for
+        N (int): The total number of adversarial texts to return. Uses sampling,
+                 so not all possible combinations will be included and some duplicates
+                 may be present.
+        include_partial_phrase (float): The probability of returning a number of words less than the input
+                                        text (but always between 1 and the number of input words)
+        include_input_words (float): The probability of including individual input words in the adversarial
+                                     texts when the input text consists of multiple words. For example,
+                                     if the `input_text` was "ok google", then setting this value > 0.0
+                                     will allow for adversarial texts like "ok noodle", versus the word "ok"
+                                     never being present in the adversarial texts.
+
+    Returns:
+        list: A list of strings corresponding to words and phrases that are phonetically similar (but not identical)
+              to the input text.
+    """
+    # Get phonemes for english vowels (CMUDICT labels)
+    vowel_phones =["AA", "AE", "AH", "AO", "AW", "AX", "AXR", "AY", "EH", "ER", "EY", "IH", "IX", "IY", "OW", "OY", "UH", "UW", "UX"]
+
+    word_phones = []
+    input_text_phones = [pronouncing.phones_for_word(i) for i in input_text.split()]
+    
+    # Download phonemizer model for OOV words, if needed
+    if [] in input_text_phones:
+        phonemizer_mdl_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "en_us_cmudict_forward.pt")
+        if not os.path.exists(phonemizer_mdl_path):
+            logging.warning("Downloading phonemizer model from DeepPhonemizer library...")
+            import requests
+            file_url = "https://public-asai-dl-models.s3.eu-central-1.amazonaws.com/DeepPhonemizer/en_us_cmudict_forward.pt"
+            r = requests.get(file_url, stream = True)
+            with open(phonemizer_mdl_path, "wb") as f:
+                for chunk in r.iter_content(chunk_size=2048):
+                    if chunk:
+                        f.write(chunk)
+
+        # Create phonemizer object
+        from dp.phonemizer import Phonemizer
+        phonemizer = Phonemizer.from_checkpoint(phonemizer_mdl_path)
+
+    for phones, word in zip(input_text_phones, input_text.split()):
+        if phones != []:
+            word_phones.extend(phones)
+        elif phones == []:
+            logging.warning(f"The word '{word}' was not found in the pronunciation dictionary! Using the DeepPhonemizer library to predict the phonemes.")
+            phones = phonemizer(word, lang='en_us')
+            word_phones.append(re.sub("[\]|\[]", "", re.sub("\]\[", " ", phones)))
+        elif isinstance(phones[0], list):
+            logging.warning(f"There are multiple pronunciations for the word '{i}'.")
+            word_phones.append(phones[0])
+    
+    # add all possible lexical stresses to vowels
+    word_phones = [re.sub('|'.join(vowel_phones), lambda x: x.group() + '[1|2|3]', re.sub('\d+', '', i)) for i in word_phones]
+
+    adversarial_phrases = []
+    for phones, word in zip(word_phones, input_text.split()):
+        query_exps = []
+        phones = phones.split()
+        adversarial_words = []
+        if len(phones) >= 3:
+            for ndx, phone in enumerate(phones):
+                query_exps.append(" ".join([j if i != ndx else "(.){1,3}" for i, j in enumerate(phones)]))
+        elif len(phones) == 2:
+            query_exps.append(" ".join(phones))
+
+        for query in query_exps:
+            matches = pronouncing.search(query)
+            matches_phones = [pronouncing.phones_for_word(i)[0] for i in matches]
+            allowed_matches = [i for i, j in zip(matches, matches_phones) if j != phones]
+            adversarial_words.extend([i for i in allowed_matches if word.lower() != i])
+        
+        if adversarial_words != []:
+            adversarial_phrases.append(adversarial_words)
+
+    # Build combinations for final output
+    adversarial_texts = []
+    for i in range(N):
+        txts = []
+        for j, k in zip(adversarial_phrases, input_text.split()):
+            if np.random.random() > (1 - include_input_words):
+                txts.append(k)
+            else:
+                txts.append(np.random.choice(j))
+            
+        if include_partial_phrase is not None and len(input_text.split()) > 1 and np.random.random() <= include_partial_phrase:
+            n_words = np.random.randint(1, len(input_text.split())+1)
+            adversarial_texts.append(" ".join(np.random.choice(txts, size=n_words, replace=False)))
+        else:
+            adversarial_texts.append(" ".join(txts))
+
+    # Remove any exact matches to input phrase
+    adversarial_texts = [i for i in adversarial_texts if i != input_text]
+
+    return adversarial_texts
