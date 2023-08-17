@@ -24,7 +24,6 @@ import logging
 from tqdm import tqdm
 import openwakeword
 from numpy.lib.format import open_memmap
-from openwakeword.data import trim_mmap
 from typing import Union, List, Callable, Deque
 
 
@@ -530,7 +529,9 @@ def compute_features_from_generator(generator, n_total, clip_duration, output_fi
     Returns:
         None
     """
-    
+    # Function specific imports
+    from openwakeword.data import trim_mmap
+
     # Create audio features object
     F = AudioFeatures(device=device)
     

@@ -23,6 +23,7 @@ import random
 from tqdm import tqdm
 from typing import List, Tuple
 import numpy as np
+import itertools
 import pronouncing
 import torch
 import audiomentations
@@ -949,18 +950,17 @@ def generate_adversarial_texts(input_text: str, N: int, include_partial_phrase: 
             word_phones.append(phones[0])
     
     # add all possible lexical stresses to vowels
-    word_phones = [re.sub('|'.join(vowel_phones), lambda x: x.group() + '[1|2|3]', re.sub('\d+', '', i)) for i in word_phones]
+    word_phones = [re.sub('|'.join(vowel_phones), lambda x: x.group() + '[0|1|2]', re.sub('\d+', '', i)) for i in word_phones]
 
     adversarial_phrases = []
     for phones, word in zip(word_phones, input_text.split()):
         query_exps = []
         phones = phones.split()
         adversarial_words = []
-        if len(phones) >= 3:
-            for ndx, phone in enumerate(phones):
-                query_exps.append(" ".join([j if i != ndx else "(.){1,3}" for i, j in enumerate(phones)]))
-        elif len(phones) == 2:
+        if len(phones) == 2:
             query_exps.append(" ".join(phones))
+        else:
+            query_exps.extend(phoneme_replacement(phones, max_replace=max(0, len(phones)-2), replace_char="(.){1,3}"))
 
         for query in query_exps:
             matches = pronouncing.search(query)
@@ -991,3 +991,19 @@ def generate_adversarial_texts(input_text: str, N: int, include_partial_phrase: 
     adversarial_texts = [i for i in adversarial_texts if i != input_text]
 
     return adversarial_texts
+
+def phoneme_replacement(input_chars, max_replace, replace_char='"(.){1,3}"'):
+    results = []
+    chars = list(input_chars)
+
+    # iterate over the number of characters to replace (1 to max_replace)
+    for r in range(1, max_replace+1):
+        # get all combinations for a fixed r
+        comb = itertools.combinations(range(len(chars)), r)
+        for indices in comb:
+            chars_copy = chars.copy()
+            for i in indices:
+                chars_copy[i] = replace_char
+            results.append(' '.join(chars_copy))
+
+    return results
