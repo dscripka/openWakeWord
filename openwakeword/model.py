@@ -231,7 +231,7 @@ class Model():
         """Predict with all of the wakeword models on the input audio frames
 
         Args:
-            x (Union[ndarray]): The input audio data to predict on with the models. Should be multiples of 80 ms
+            x (ndarray): The input audio data to predict on with the models. Should be multiples of 80 ms
                                 (1280 samples), with longer lengths reducing overall CPU usage
                                 but decreasing detection latency.
             patience (dict): How many consecutive frames (of 1280 samples or 80 ms) above the threshold that must
@@ -260,9 +260,9 @@ class Model():
 
         # Get audio features (optionally with Speex noise suppression)
         if self.speex_ns:
-            self.preprocessor(self._suppress_noise_with_speex(x))
+            n_prepared_samples = self.preprocessor(self._suppress_noise_with_speex(x))
         else:
-            self.preprocessor(x)
+            n_prepared_samples = self.preprocessor(x)
 
         if timing:
             timing_dict["models"]["preprocessor"] = time.time() - feature_start
@@ -274,9 +274,9 @@ class Model():
                 model_start = time.time()
 
             # Run model to get predictions
-            if len(x) > 1280:
+            if n_prepared_samples > 1280:
                 group_predictions = []
-                for i in np.arange(len(x)//1280-1, -1, -1):
+                for i in np.arange(n_prepared_samples//1280-1, -1, -1):
                     group_predictions.extend(
                         self.model_prediction_function[mdl](
                             self.preprocessor.get_features(
@@ -286,10 +286,16 @@ class Model():
                         )
                     )
                 prediction = np.array(group_predictions).max(axis=0)[None, ]
-            else:
+            elif n_prepared_samples == 1280:
                 prediction = self.model_prediction_function[mdl](
                     self.preprocessor.get_features(self.model_inputs[mdl])
                 )
+            else:
+                if len(self.prediction_buffer[mdl]) > 0:
+                    prediction = [[[self.prediction_buffer[mdl][-1]]]]
+                else:
+                    for int_label, cls in self.class_mapping[mdl].items():
+                        prediction = [[[0]*(int(int_label)+1)]]
 
             if self.model_outputs[mdl] == 1:
                 predictions[mdl] = prediction[0][0][0]
