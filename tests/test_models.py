@@ -29,11 +29,15 @@
 # Imports
 import openwakeword
 import os
+import sys
 import numpy as np
 from pathlib import Path
 import collections
 import pytest
 import platform
+import pickle
+import tempfile
+import mock
 
 
 # Tests
@@ -51,8 +55,44 @@ class TestModels:
         # Prediction on random data
         owwModel.predict(np.random.randint(-1000, 1000, 1280).astype(np.int16))
 
-        # Prediction on random data with different chunk size
+    def test_predict_with_different_frame_sizes(self):
+        owwModel = openwakeword.Model(wakeword_models=[
+                                        os.path.join("openwakeword", "resources", "models", "alexa_v0.1.onnx")
+                                      ], inference_framework="onnx")
+
+        # Prediction on random data with integer multiples of standard chunk size (1280 samples)
+        owwModel.predict(np.random.randint(-1000, 1000, 1280).astype(np.int16))
         owwModel.predict(np.random.randint(-1000, 1000, 1280*2).astype(np.int16))
+
+        # Prediction on data with a chunk size not an integer multiple of 1280
+        owwModel.predict(np.random.randint(-1000, 1000, 1024).astype(np.int16))
+        owwModel.predict(np.random.randint(-1000, 1000, 1024*2).astype(np.int16))
+
+    def test_exception_handling_for_inference_framework(self):
+        with mock.patch.dict(sys.modules, {'onnxruntime': None}):
+            with pytest.raises(ValueError):
+                openwakeword.Model(wakeword_models=[
+                                                os.path.join("openwakeword", "resources", "models", "alexa_v0.1.onnx")
+                                            ], inference_framework="onnx")
+
+        with mock.patch.dict(sys.modules, {'tflite_runtime': None}):
+            openwakeword.Model(wakeword_models=[
+                                            os.path.join("openwakeword", "resources", "models", "alexa_v0.1.tflite")
+                                        ], inference_framework="tflite")
+
+    def test_predict_with_custom_verifier_model(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            # Train custom verifier model with random data
+            verifier_model = openwakeword.custom_verifier_model.train_verifier_model(np.random.random((2, 10)), np.array([0, 1]))
+            pickle.dump(verifier_model, open(os.path.join(tmp_dir, "test_verifier.pkl"), "wb"))
+
+            # Load model with verifier
+            owwModel = openwakeword.Model(wakeword_models=[
+                                        os.path.join("openwakeword", "resources", "models", "alexa_v0.1.onnx")
+                                    ], inference_framework="onnx",
+                                    custom_verifier_models={"alexa_v0.1": os.path.join(tmp_dir, "test_verifier.pkl")})
+
+            owwModel.predict(np.random.randint(-1000, 1000, 1280).astype(np.int16))
 
     def test_load_pretrained_model_by_name(self):
         # Load model with defaults
