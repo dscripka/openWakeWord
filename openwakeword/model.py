@@ -295,12 +295,15 @@ class Model():
                 prediction = self.model_prediction_function[mdl](
                     self.preprocessor.get_features(self.model_inputs[mdl])
                 )
-            elif n_prepared_samples < 1280:
-                if len(self.prediction_buffer[mdl]) > 0:
-                    prediction = [[[self.prediction_buffer[mdl][-1]]]]
-                else:
-                    for int_label, cls in self.class_mapping[mdl].items():
-                        prediction = [[[0]*(int(int_label)+1)]]
+            elif n_prepared_samples < 1280:  # get previous prediction if there aren't enough samples
+                if self.model_outputs[mdl] == 1:
+                    if len(self.prediction_buffer[mdl]) > 0:
+                        prediction = [[[self.prediction_buffer[mdl][-1]]]]
+                    else:
+                        prediction = [[[0]]]
+                elif self.model_outputs[mdl] != 1:
+                    n_classes = max([int(i) for i in self.class_mapping[mdl].keys()])
+                    prediction = [[[0]*(n_classes+1)]]
 
             if self.model_outputs[mdl] == 1:
                 predictions[mdl] = prediction[0][0][0]

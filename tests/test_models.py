@@ -56,8 +56,22 @@ class TestModels:
         owwModel.predict(np.random.randint(-1000, 1000, 1280).astype(np.int16))
 
     def test_predict_with_different_frame_sizes(self):
+        # Test with binary model
         owwModel = openwakeword.Model(wakeword_models=[
                                         os.path.join("openwakeword", "resources", "models", "alexa_v0.1.onnx")
+                                      ], inference_framework="onnx")
+
+        # Prediction on random data with integer multiples of standard chunk size (1280 samples)
+        owwModel.predict(np.random.randint(-1000, 1000, 1280).astype(np.int16))
+        owwModel.predict(np.random.randint(-1000, 1000, 1280*2).astype(np.int16))
+
+        # Prediction on data with a chunk size not an integer multiple of 1280
+        owwModel.predict(np.random.randint(-1000, 1000, 1024).astype(np.int16))
+        owwModel.predict(np.random.randint(-1000, 1000, 1024*2).astype(np.int16))
+
+        # Test with multiclass model
+        owwModel = openwakeword.Model(wakeword_models=[
+                                        os.path.join("openwakeword", "resources", "models", "timer_v0.1.onnx")
                                       ], inference_framework="onnx")
 
         # Prediction on random data with integer multiples of standard chunk size (1280 samples)
@@ -83,14 +97,16 @@ class TestModels:
     def test_predict_with_custom_verifier_model(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             # Train custom verifier model with random data
-            verifier_model = openwakeword.custom_verifier_model.train_verifier_model(np.random.random((2, 10)), np.array([0, 1]))
+            verifier_model = openwakeword.custom_verifier_model.train_verifier_model(np.random.random((2, 1536)), np.array([0, 1]))
             pickle.dump(verifier_model, open(os.path.join(tmp_dir, "test_verifier.pkl"), "wb"))
 
             # Load model with verifier
-            owwModel = openwakeword.Model(wakeword_models=[
-                                        os.path.join("openwakeword", "resources", "models", "alexa_v0.1.onnx")
-                                    ], inference_framework="onnx",
-                                    custom_verifier_models={"alexa_v0.1": os.path.join(tmp_dir, "test_verifier.pkl")})
+            owwModel = openwakeword.Model(
+                wakeword_models=[os.path.join("openwakeword", "resources", "models", "alexa_v0.1.onnx")],
+                inference_framework="onnx",
+                custom_verifier_models={"alexa_v0.1": os.path.join(tmp_dir, "test_verifier.pkl")},
+                custom_verifier_threshold=0.0
+            )
 
             owwModel.predict(np.random.randint(-1000, 1000, 1280).astype(np.int16))
 
