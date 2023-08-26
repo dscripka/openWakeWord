@@ -57,30 +57,37 @@ class TestModels:
 
     def test_predict_with_different_frame_sizes(self):
         # Test with binary model
-        owwModel = openwakeword.Model(wakeword_models=[
+        owwModel1 = openwakeword.Model(wakeword_models=[
+                                        os.path.join("openwakeword", "resources", "models", "alexa_v0.1.onnx")
+                                      ], inference_framework="onnx")
+
+        owwModel2 = openwakeword.Model(wakeword_models=[
                                         os.path.join("openwakeword", "resources", "models", "alexa_v0.1.onnx")
                                       ], inference_framework="onnx")
 
         # Prediction on random data with integer multiples of standard chunk size (1280 samples)
-        owwModel.predict(np.random.randint(-1000, 1000, 1280).astype(np.int16))
-        owwModel.predict(np.random.randint(-1000, 1000, 1280*2).astype(np.int16))
+        predictions1 = owwModel1.predict_clip(os.path.join("tests", "data", "alexa_test.wav"), chunk_size=1280)
+        predictions2 = owwModel2.predict_clip(os.path.join("tests", "data", "alexa_test.wav"), chunk_size=1280*2)
+        np.testing.assert_approx_equal(max([i['alexa_v0.1'] for i in predictions1]), max([i['alexa_v0.1'] for i in predictions2]), 5)
 
         # Prediction on data with a chunk size not an integer multiple of 1280
-        owwModel.predict(np.random.randint(-1000, 1000, 1024).astype(np.int16))
-        owwModel.predict(np.random.randint(-1000, 1000, 1024*2).astype(np.int16))
+        predictions1 = owwModel1.predict_clip(os.path.join("tests", "data", "alexa_test.wav"), chunk_size=1024)
+        predictions2 = owwModel2.predict_clip(os.path.join("tests", "data", "alexa_test.wav"), chunk_size=1024*2)
+        np.testing.assert_approx_equal(max([i['alexa_v0.1'] for i in predictions1]), max([i['alexa_v0.1'] for i in predictions2]), 5)
 
         # Test with multiclass model
-        owwModel = openwakeword.Model(wakeword_models=[
-                                        os.path.join("openwakeword", "resources", "models", "timer_v0.1.onnx")
-                                      ], inference_framework="onnx")
+        owwModel1 = openwakeword.Model(wakeword_models=["timer"], inference_framework="onnx")
+        owwModel2 = openwakeword.Model(wakeword_models=["timer"], inference_framework="onnx")
 
         # Prediction on random data with integer multiples of standard chunk size (1280 samples)
-        owwModel.predict(np.random.randint(-1000, 1000, 1280).astype(np.int16))
-        owwModel.predict(np.random.randint(-1000, 1000, 1280*2).astype(np.int16))
+        predictions1 = owwModel1.predict_clip(os.path.join("tests", "data", "alexa_test.wav"), chunk_size=1280)
+        predictions2 = owwModel2.predict_clip(os.path.join("tests", "data", "alexa_test.wav"), chunk_size=1280*2)
+        assert abs(max([i['1_minute_timer'] for i in predictions1]) - max([i['1_minute_timer'] for i in predictions2])) < 0.00001
 
         # Prediction on data with a chunk size not an integer multiple of 1280
-        owwModel.predict(np.random.randint(-1000, 1000, 1024).astype(np.int16))
-        owwModel.predict(np.random.randint(-1000, 1000, 1024*2).astype(np.int16))
+        predictions1 = owwModel1.predict_clip(os.path.join("tests", "data", "alexa_test.wav"), chunk_size=1024)
+        predictions2 = owwModel2.predict_clip(os.path.join("tests", "data", "alexa_test.wav"), chunk_size=1024*2)
+        assert abs(max([i['1_minute_timer'] for i in predictions1]) - max([i['1_minute_timer'] for i in predictions2])) < 0.00001
 
     def test_exception_handling_for_inference_framework(self):
         with mock.patch.dict(sys.modules, {'onnxruntime': None}):

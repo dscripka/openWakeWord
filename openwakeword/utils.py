@@ -396,23 +396,28 @@ class AudioFeatures():
     def _streaming_features(self, x):
         # Add raw audio data to buffer, temporarily storing extra frames if not an even number of 80 ms chunks
         processed_samples = 0
+
         if self.raw_data_remainder.shape[0] != 0:
             x = np.concatenate((self.raw_data_remainder, x))
+            self.raw_data_remainder = np.empty(0)
 
-        if x.shape[0] < 1280 and self.accumulated_samples == 0:
-            self._buffer_raw_data(x)
-            self.accumulated_samples += len(x)
-
-        elif (x.shape[0] >= 1280 and self.accumulated_samples == 0) or \
-             (self.accumulated_samples != 0 and self.accumulated_samples + x.shape[0] >= 1280):
+        if self.accumulated_samples + x.shape[0] >= 1280:
             remainder = (self.accumulated_samples + x.shape[0]) % 1280
-            x_even_chunks = x[0:x.shape[0] - remainder]
-            self._buffer_raw_data(x_even_chunks)
-            self.accumulated_samples += len(x_even_chunks)
-            self.raw_data_remainder = x[x.shape[0] - remainder:]
+            if remainder != 0:
+                x_even_chunks = x[0:-remainder]
+                self._buffer_raw_data(x_even_chunks)
+                self.accumulated_samples += len(x_even_chunks)
+                self.raw_data_remainder = x[-remainder:]
+            elif remainder == 0:
+                self._buffer_raw_data(x)
+                self.accumulated_samples += x.shape[0]
+                self.raw_data_remainder = np.empty(0)
+        else:
+            self.accumulated_samples += x.shape[0]
+            self._buffer_raw_data(x)
 
-        # Only calculate melspectrogram once minimum samples area accumulated
-        if self.accumulated_samples >= 1280:
+        # Only calculate melspectrogram once minimum samples are accumulated
+        if self.accumulated_samples >= 1280 and self.accumulated_samples % 1280 == 0:
             self._streaming_melspectrogram(self.accumulated_samples)
 
             # Calculate new audio embeddings/features based on update melspectrograms

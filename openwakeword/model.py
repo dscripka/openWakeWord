@@ -97,7 +97,7 @@ class Model():
                         raise ValueError("Could not find pretrained model for model name '{}'".format(i))
                     else:
                         wakeword_models[ndx] = matching_model[0]
-                        wakeword_model_names.append(matching_model[0].split(os.path.sep)[-1])
+                        wakeword_model_names.append(i)
 
         # Create attributes to store models and metadata
         self.models = {}
