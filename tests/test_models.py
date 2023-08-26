@@ -30,6 +30,7 @@
 import openwakeword
 import os
 import sys
+import logging
 import numpy as np
 from pathlib import Path
 import collections
@@ -172,31 +173,37 @@ class TestModels:
             assert 1 == 1
         else:
             # Load model with defaults
-            owwModel = openwakeword.Model(enable_speex_noise_suppression=True)
+            try:
+                owwModel = openwakeword.Model(enable_speex_noise_suppression=True)
 
-            # Get clips for each model (assumes that test clips will have the model name in the filename)
-            test_dict = {}
-            for mdl_name in owwModel.models.keys():
-                all_clips = [str(i) for i in Path(os.path.join("tests", "data")).glob("*.wav")]
-                test_dict[mdl_name] = [i for i in all_clips if mdl_name in i]
+                # Get clips for each model (assumes that test clips will have the model name in the filename)
+                test_dict = {}
+                for mdl_name in owwModel.models.keys():
+                    all_clips = [str(i) for i in Path(os.path.join("tests", "data")).glob("*.wav")]
+                    test_dict[mdl_name] = [i for i in all_clips if mdl_name in i]
 
-            # Predict
-            for model, clips in test_dict.items():
-                for clip in clips:
-                    # Get predictions for reach frame in the clip
-                    predictions = owwModel.predict_clip(clip)
-                    owwModel.reset()  # reset after each clip to ensure independent results
+                # Predict
+                for model, clips in test_dict.items():
+                    for clip in clips:
+                        # Get predictions for reach frame in the clip
+                        predictions = owwModel.predict_clip(clip)
+                        owwModel.reset()  # reset after each clip to ensure independent results
 
-                    # Make predictions dictionary flatter
-                    predictions_flat = collections.defaultdict(list)
-                    [predictions_flat[key].append(i[key]) for i in predictions for key in i.keys()]
+                        # Make predictions dictionary flatter
+                        predictions_flat = collections.defaultdict(list)
+                        [predictions_flat[key].append(i[key]) for i in predictions for key in i.keys()]
 
-                # Check scores against default threshold (0.5)
-                for key in predictions_flat.keys():
-                    if key in clip:
-                        assert max(predictions_flat[key]) >= 0.5
-                    else:
-                        assert max(predictions_flat[key]) < 0.5
+                    # Check scores against default threshold (0.5)
+                    for key in predictions_flat.keys():
+                        if key in clip:
+                            assert max(predictions_flat[key]) >= 0.5
+                        else:
+                            assert max(predictions_flat[key]) < 0.5
+            except ImportError:
+                logging.warning("Attemped to test Speex noise cancelling functionality, but the 'speexdsp_ns' library was not installed!"
+                                " If you want these tests to be run, install this library as shown in the openwakeword documentation."
+                                )
+                assert 1 == 1
 
     def test_models_with_vad(self):
         # Load model with defaults
@@ -264,8 +271,8 @@ class TestModels:
 
     def test_get_positive_prediction_frames(self):
         owwModel = openwakeword.Model(wakeword_models=[
-                                        os.path.join("openwakeword", "resources", "models", "alexa_v0.1.tflite")
-                                      ], inference_framework="tflite")
+                                        os.path.join("openwakeword", "resources", "models", "alexa_v0.1.onnx")
+                                      ], inference_framework="onnx")
 
         clip = os.path.join("tests", "data", "alexa_test.wav")
         features = owwModel._get_positive_prediction_frames(clip)
