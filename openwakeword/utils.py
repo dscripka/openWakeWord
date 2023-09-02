@@ -162,7 +162,7 @@ class AudioFeatures():
         self.melspectrogram_buffer = np.ones((76, 32))  # n_frames x num_features
         self.melspectrogram_max_len = 10*97  # 97 is the number of frames in 1 second of 16hz audio
         self.accumulated_samples = 0  # the samples added to the buffer since the audio preprocessor was last called
-        # self.feature_buffer = np.vstack([self._get_embeddings(np.random.randint(-1000, 1000, 1280).astype(np.int16)) for _ in range(10)])
+        self.raw_data_remainder = np.empty(0)
         self.feature_buffer = self._get_embeddings(np.random.randint(-1000, 1000, 16000*4).astype(np.int16))
         self.feature_buffer_max_len = 120  # ~10 seconds of feature buffer history
 
@@ -377,6 +377,9 @@ class AudioFeatures():
         clip is calculated. It's unclear if this difference is significant and will impact model performance.
         In particular padding with 0 or very small values seems to demonstrate the differences well.
         """
+        if len(self.raw_data_buffer) < 400:
+            raise ValueError("The number of input frames must be at least 400 samples @ 16khz (25 ms)!")
+
         self.melspectrogram_buffer = np.vstack(
             (self.melspectrogram_buffer, self._get_melspectrogram(list(self.raw_data_buffer)[-n_samples-160*3:]))
         )
@@ -388,21 +391,33 @@ class AudioFeatures():
         """
         Adds raw audio data to the input buffer
         """
-        if len(x) < 400:
-            raise ValueError("The number of input frames must be at least 400 samples @ 16khz (25 ms)!")
         self.raw_data_buffer.extend(x.tolist() if isinstance(x, np.ndarray) else x)
 
     def _streaming_features(self, x):
-        # if len(x) != 1280:
-        #     raise ValueError("You must provide input samples in frames of 1280 samples @ 1600khz."
-        #                      f"Received a frame of {len(x)} samples.")
+        # Add raw audio data to buffer, temporarily storing extra frames if not an even number of 80 ms chunks
+        processed_samples = 0
 
-        # Add raw audio data to buffer
-        self._buffer_raw_data(x)
-        self.accumulated_samples += len(x)
+        if self.raw_data_remainder.shape[0] != 0:
+            x = np.concatenate((self.raw_data_remainder, x))
+            self.raw_data_remainder = np.empty(0)
 
-        # Only calculate melspectrogram once minimum samples area accumulated
-        if self.accumulated_samples >= 1280:
+        if self.accumulated_samples + x.shape[0] >= 1280:
+            remainder = (self.accumulated_samples + x.shape[0]) % 1280
+            if remainder != 0:
+                x_even_chunks = x[0:-remainder]
+                self._buffer_raw_data(x_even_chunks)
+                self.accumulated_samples += len(x_even_chunks)
+                self.raw_data_remainder = x[-remainder:]
+            elif remainder == 0:
+                self._buffer_raw_data(x)
+                self.accumulated_samples += x.shape[0]
+                self.raw_data_remainder = np.empty(0)
+        else:
+            self.accumulated_samples += x.shape[0]
+            self._buffer_raw_data(x)
+
+        # Only calculate melspectrogram once minimum samples are accumulated
+        if self.accumulated_samples >= 1280 and self.accumulated_samples % 1280 == 0:
             self._streaming_melspectrogram(self.accumulated_samples)
 
             # Calculate new audio embeddings/features based on update melspectrograms
@@ -415,10 +430,13 @@ class AudioFeatures():
                                                     self.embedding_model_predict(x)))
 
             # Reset raw data buffer counter
+            processed_samples = self.accumulated_samples
             self.accumulated_samples = 0
 
         if self.feature_buffer.shape[0] > self.feature_buffer_max_len:
             self.feature_buffer = self.feature_buffer[-self.feature_buffer_max_len:, :]
+
+        return processed_samples if processed_samples != 0 else self.accumulated_samples
 
     def get_features(self, n_feature_frames: int = 16, start_ndx: int = -1):
         if start_ndx != -1:
@@ -429,7 +447,7 @@ class AudioFeatures():
             return self.feature_buffer[int(-1*n_feature_frames):, :][None, ].astype(np.float32)
 
     def __call__(self, x):
-        self._streaming_features(x)
+        return self._streaming_features(x)
 
 
 # Bulk prediction function

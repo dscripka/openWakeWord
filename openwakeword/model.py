@@ -97,7 +97,7 @@ class Model():
                         raise ValueError("Could not find pretrained model for model name '{}'".format(i))
                     else:
                         wakeword_models[ndx] = matching_model[0]
-                        wakeword_model_names.append(matching_model[0].split(os.path.sep)[-1])
+                        wakeword_model_names.append(i)
 
         # Create attributes to store models and metadata
         self.models = {}
@@ -231,9 +231,11 @@ class Model():
         """Predict with all of the wakeword models on the input audio frames
 
         Args:
-            x (Union[ndarray]): The input audio data to predict on with the models. Should be multiples of 80 ms
+            x (ndarray): The input audio data to predict on with the models. Ideally should be multiples of 80 ms
                                 (1280 samples), with longer lengths reducing overall CPU usage
-                                but decreasing detection latency.
+                                but decreasing detection latency. Input audio with durations greater than or less
+                                than 80 ms is also supported, though this will add a detection delay of up to 80 ms
+                                as the appropriate number of samples are accumulated.
             patience (dict): How many consecutive frames (of 1280 samples or 80 ms) above the threshold that must
                              be observed before the current frame will be returned as non-zero.
                              Must be provided as an a dictionary where the keys are the
@@ -251,6 +253,9 @@ class Model():
                   wake-word/wake-phrase detected. If the `timing` argument is true, returns a
                   tuple of dicts containing model predictions and timing information, respectively.
         """
+        # Check input data type
+        if not isinstance(x, np.ndarray):
+            raise ValueError(f"The input audio data (x) must by a Numpy array, instead received an object of type {type(x)}.")
 
         # Setup timing dict
         if timing:
@@ -260,9 +265,9 @@ class Model():
 
         # Get audio features (optionally with Speex noise suppression)
         if self.speex_ns:
-            self.preprocessor(self._suppress_noise_with_speex(x))
+            n_prepared_samples = self.preprocessor(self._suppress_noise_with_speex(x))
         else:
-            self.preprocessor(x)
+            n_prepared_samples = self.preprocessor(x)
 
         if timing:
             timing_dict["models"]["preprocessor"] = time.time() - feature_start
@@ -274,9 +279,9 @@ class Model():
                 model_start = time.time()
 
             # Run model to get predictions
-            if len(x) > 1280:
+            if n_prepared_samples > 1280:
                 group_predictions = []
-                for i in np.arange(len(x)//1280-1, -1, -1):
+                for i in np.arange(n_prepared_samples//1280-1, -1, -1):
                     group_predictions.extend(
                         self.model_prediction_function[mdl](
                             self.preprocessor.get_features(
@@ -286,10 +291,19 @@ class Model():
                         )
                     )
                 prediction = np.array(group_predictions).max(axis=0)[None, ]
-            else:
+            elif n_prepared_samples == 1280:
                 prediction = self.model_prediction_function[mdl](
                     self.preprocessor.get_features(self.model_inputs[mdl])
                 )
+            elif n_prepared_samples < 1280:  # get previous prediction if there aren't enough samples
+                if self.model_outputs[mdl] == 1:
+                    if len(self.prediction_buffer[mdl]) > 0:
+                        prediction = [[[self.prediction_buffer[mdl][-1]]]]
+                    else:
+                        prediction = [[[0]]]
+                elif self.model_outputs[mdl] != 1:
+                    n_classes = max([int(i) for i in self.class_mapping[mdl].keys()])
+                    prediction = [[[0]*(n_classes+1)]]
 
             if self.model_outputs[mdl] == 1:
                 predictions[mdl] = prediction[0][0][0]
