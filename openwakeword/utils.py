@@ -509,11 +509,12 @@ def bulk_predict(
     # Consolidate results and return
     return {list(i.keys())[0]: list(i.values())[0] for i in results}
 
+
 def compute_features_from_generator(generator, n_total, clip_duration, output_file, device="cpu", ncpu=1):
     """
     Computes audio features from a generator that produces Numpy arrays of shape (batch_size, samples)
     containing 16-bit PCM audio data.
-    
+
     Args:
         generator (Generator): The generator that process the arrays of audio data
         n_total (int): The total number of rows (audio clips) that the generator will produce.
@@ -525,7 +526,7 @@ def compute_features_from_generator(generator, n_total, clip_duration, output_fi
                            than the available system memory.
         device (str): The device ("cpu" or "gpu") to use for computing features.
         ncpu (int): The number of cores to use when process the audio features (if computing on CPU)
-        
+
     Returns:
         None
     """
@@ -534,31 +535,31 @@ def compute_features_from_generator(generator, n_total, clip_duration, output_fi
 
     # Create audio features object
     F = AudioFeatures(device=device)
-    
+
     # Determine the output shape and create output file
     n_feature_cols = F.get_embedding_shape(clip_duration/16000)
     output_shape = (n_total, n_feature_cols[0], n_feature_cols[1])
     fp = open_memmap(output_file, mode='w+', dtype=np.float32, shape=output_shape)
-    
+
     # Get batch size by pulling one value from the generator and store features
     row_counter = 0
     audio_data = next(generator)
     batch_size = audio_data.shape[0]
-    
+
     if batch_size > n_total:
         raise ValueError(f"The value of 'n_total' ({n_total}) is less than the batch size ({batch_size})."
                          " Please increase 'n_total' to be >= batch size.")
-    
+
     features = F.embed_clips(audio_data, batch_size=batch_size)
     fp[row_counter:row_counter+features.shape[0], :, :] = features
     row_counter += features.shape[0]
     fp.flush()
-    
+
     # Compute features and add data to output file
     for audio_data in tqdm(generator, total=n_total//batch_size, desc="Computing features"):
         if row_counter >= n_total:
             break
-        
+
         features = F.embed_clips(audio_data, batch_size=batch_size, ncpu=ncpu)
         if row_counter + features.shape[0] > n_total:
             features = features[0:n_total-row_counter]
@@ -569,6 +570,7 @@ def compute_features_from_generator(generator, n_total, clip_duration, output_fi
 
     # Trip empty rows from the mmapped array
     trim_mmap(output_file)
+
 
 # Handle deprecated arguments and naming (thanks to https://stackoverflow.com/a/74564394)
 def re_arg(kwarg_map):

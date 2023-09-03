@@ -40,7 +40,9 @@ setuptools.setup(
                     'pytest-cov>=2.10.1,<3',
                     'pytest-flake8>=1.1.1,<2',
                     'flake8>=4.0,<4.1',
-                    'pytest-mypy>=0.10.0,<1'
+                    'pytest-mypy>=0.10.0,<1',
+                    'types-requests',
+                    'types-PyYAML'
                 ],
         'full': [
                     'mutagen>=1.46.0,<2',

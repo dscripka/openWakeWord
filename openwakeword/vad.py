@@ -64,7 +64,7 @@ class VAD():
                     "models",
                     "silero_vad.onnx"
                  ),
-                 n_threads = 1
+                 n_threads: int = 1
                  ):
         """Initialize the VAD model object.
 
