@@ -201,7 +201,7 @@ class Model(nn.Module):
         val_set_hrs = 11.3
 
         # Sequence 1
-        print("Starting training sequence 1...")
+        logging.info("Starting training sequence 1...")
         lr = 0.0001
         weights = np.linspace(1, max_negative_weight, int(steps)).tolist()
         val_steps = np.linspace(steps-int(steps*0.25), steps, 20).astype(np.int64)
@@ -216,14 +216,14 @@ class Model(nn.Module):
                     target_val_accuracy=target_val_accuracy, target_val_recall=target_val_recall)
 
         # Sequence 2
-        print("Starting training sequence 2...")
+        logging.info("Starting training sequence 2...")
         lr = lr/10
         steps = steps/10
 
         # Adjust weights as needed based on false positive per hour performance from first sequence
         if self.best_val_fp > target_val_fp_per_hour:
             max_negative_weight = max_negative_weight*2
-            print("Increasing weight on negative examples to reduce false positives...")
+            logging.info("Increasing weight on negative examples to reduce false positives...")
 
         weights = np.linspace(1, max_negative_weight, int(steps)).tolist()
         val_steps = np.linspace(1, steps, 20).astype(np.int16)
@@ -238,13 +238,13 @@ class Model(nn.Module):
                     target_val_accuracy=target_val_accuracy, target_val_recall=target_val_recall)
 
         # Sequence 3
-        print("Starting training sequence 3...")
+        logging.info("Starting training sequence 3...")
         lr = lr/10
 
         # Adjust weights as needed based on false positive per hour performance from second sequence
         if self.best_val_fp > target_val_fp_per_hour:
             max_negative_weight = max_negative_weight*2
-            print("Increasing weight on negative examples to reduce false positives...")
+            logging.info("Increasing weight on negative examples to reduce false positives...")
 
         weights = np.linspace(1, max_negative_weight, int(steps)).tolist()
         val_steps = np.linspace(1, steps, 20).astype(np.int16)
@@ -259,10 +259,16 @@ class Model(nn.Module):
                     target_val_accuracy=target_val_accuracy, target_val_recall=target_val_recall)
 
         # Merge best models
-        print("Merging best checkpoints into single model...")
-        combined_model = self.average_models(models=self.best_models)
+        if len(self.best_models) == 0:
+            logging.warning("No checkpoint with metrics >= than target values was found!\n"
+                            "Consider generating more examples, or reducing target metrics."
+                            "Returning the model corresponding to the last training step.\n\n")
+            return self.model
+        else:
+            logging.info("Merging best checkpoints into single model...")
+            combined_model = self.average_models(models=self.best_models)
 
-        # Report validationmetrics for combined model
+        # Report validation metrics for combined model
         with torch.no_grad():
             for batch in X_val:
                 x, y = batch[0].to(self.device), batch[1].to(self.device)
@@ -279,11 +285,9 @@ class Model(nn.Module):
 
             combined_model_fp_per_hr = (combined_model_fp/val_set_hrs).detach().cpu().numpy()
 
-        print("\n################\n")
-        print("Final Model Accuracy:", combined_model_accuracy)
-        print("Final Model Recall:", combined_model_recall)
-        print("Final Model False Positives per Hour:", combined_model_fp_per_hr)
-        print("\n################\n")
+        logging.info(f"\n################\nFinal Model Accuracy: {combined_model_accuracy}"
+                     f"\nFinal Model Recall: {combined_model_recall}\nFinal Model False Positives per Hour: {combined_model_fp_per_hr}"
+                     "\n################\n")
 
         return combined_model
 
@@ -295,6 +299,7 @@ class Model(nn.Module):
                              "Use the `export_to_onnx` function instead.")
 
         # Save ONNX model
+        logging.info(f"Saving ONNX mode as '{os.path.join(output_dir, model_name + '.onnx')}'")
         model_to_save = copy.deepcopy(model)
         torch.onnx.export(model_to_save.to("cpu"), torch.rand(self.input_shape)[None, ], os.path.join(output_dir, model_name + ".onnx"))
 
@@ -318,6 +323,7 @@ class Model(nn.Module):
             converter = tf.lite.TFLiteConverter.from_saved_model(os.path.join(tmp_dir, "tf_model"))
             tflite_model = converter.convert()
 
+            logging.info(f"Saving tflite mode as '{os.path.join(output_dir, model_name + '.tflite')}'")
             with open(os.path.join(output_dir, model_name + ".tflite"), 'wb') as f:
                 f.write(tflite_model)
 
@@ -415,11 +421,11 @@ class Model(nn.Module):
                 self.history["val_recall"].append(val_recall)
 
                 # Save models with a validation score below a given threshold
-                print(val_fp_per_hr, self.history["val_accuracy"][-1], self.history["val_recall"][-1])
+                # print(val_fp_per_hr, self.history["val_accuracy"][-1], self.history["val_recall"][-1])
                 if val_fp_per_hr <= max(self.best_val_fp, max_val_fp_per_hr) and \
                         self.history["val_accuracy"][-1] >= target_val_accuracy and \
                         self.history["val_recall"][-1] >= target_val_recall:
-                    print("Saving checkpoint with metrics >= to targets!")
+                    # logging.info("Saving checkpoint with metrics >= to targets!")
                     self.best_models.append(copy.deepcopy(self.model))
                     self.best_val_fp = val_fp_per_hr
                     self.best_val_recall = self.history["val_recall"][-1]
@@ -441,7 +447,6 @@ if __name__ == '__main__':
     parser.add_argument(
         "--generate_clips",
         help="Execute the synthetic data generation process",
-        type=bool,
         action="store_true",
         default="False",
         required=False
@@ -449,7 +454,6 @@ if __name__ == '__main__':
     parser.add_argument(
         "--augment_clips",
         help="Execute the synthetic data augmentation process",
-        type=bool,
         action="store_true",
         default="False",
         required=False
@@ -457,7 +461,6 @@ if __name__ == '__main__':
     parser.add_argument(
         "--train_model",
         help="Execute the model training process",
-        type=bool,
         action="store_true",
         default="False",
         required=False
@@ -471,8 +474,11 @@ if __name__ == '__main__':
     from generate_samples import generate_samples
 
     # Define output locations
+    config["output_dir"] = os.path.abspath(config["output_dir"])
     if not os.path.exists(config["output_dir"]):
         os.mkdir(config["output_dir"])
+    if not os.path.exists(os.path.join(config["output_dir"], config["model_name"])):
+        os.mkdir(os.path.join(config["output_dir"], config["model_name"]))
 
     positive_train_output_dir = os.path.join(config["output_dir"], config["model_name"], "positive_train")
     positive_test_output_dir = os.path.join(config["output_dir"], config["model_name"], "positive_test")
@@ -486,10 +492,13 @@ if __name__ == '__main__':
 
     if args.generate_clips is True:
         # Generate positive clips for training
+        logging.info("Generating positive clips for training")
+        if not os.path.exists(positive_train_output_dir):
+            os.mkdir(positive_train_output_dir)
         n_current_samples = len(os.listdir(positive_train_output_dir))
         if n_current_samples <= 0.95*config["n_samples"]:
             generate_samples(
-                text=[config["target_phrase"]], max_samples=config["n_samples"]-n_current_samples,
+                text=config["target_phrase"], max_samples=config["n_samples"]-n_current_samples,
                 batch_size=config["tts_batch_size"],
                 noise_scales=[0.98], noise_scale_ws=[0.98], length_scales=[0.75, 1.0, 1.25],
                 output_dir=positive_train_output_dir, auto_reduce_batch_size=True,
@@ -500,50 +509,59 @@ if __name__ == '__main__':
             logging.warning(f"Skipping generation of positive clips for training, as ~{config['n_samples']} already exist")
 
         # Generate positive clips for testing
+        logging.info("Generating positive clips for testing")
+        if not os.path.exists(positive_test_output_dir):
+            os.mkdir(positive_test_output_dir)
         n_current_samples = len(os.listdir(positive_test_output_dir))
         if n_current_samples <= 0.95*config["n_samples_val"]:
-            generate_samples(text=[config["target_phrase"]], max_samples=config["n_samples_val"]-n_current_samples,
-                            batch_size=config["tts_batch_size"],
-                            noise_scales=[1.0], noise_scale_ws=[1.0], length_scales=[0.75, 1.0, 1.25],
-                            output_dir=positive_test_output_dir, auto_reduce_batch_size=True)
+            generate_samples(text=config["target_phrase"], max_samples=config["n_samples_val"]-n_current_samples,
+                             batch_size=config["tts_batch_size"],
+                             noise_scales=[1.0], noise_scale_ws=[1.0], length_scales=[0.75, 1.0, 1.25],
+                             output_dir=positive_test_output_dir, auto_reduce_batch_size=True)
             torch.cuda.empty_cache()
         else:
             logging.warning(f"Skipping generation of positive clips testing, as ~{config['n_samples_val']} already exist")
 
         # Generate adversarial negative clips for training
+        logging.info("Generating negative clips for training")
+        if not os.path.exists(negative_train_output_dir):
+            os.mkdir(negative_train_output_dir)
         n_current_samples = len(os.listdir(negative_train_output_dir))
         if n_current_samples <= 0.95*config["n_samples"]:
             adversarial_texts = config["custom_negative_phrases"]
             for target_phrase in config["target_phrase"]:
-                adversarial_texts.append(generate_adversarial_texts(
+                adversarial_texts.extend(generate_adversarial_texts(
                     input_text=target_phrase,
                     N=config["n_samples"]//len(config["target_phrase"]),
                     include_partial_phrase=1.0,
                     include_input_words=0.2))
             generate_samples(text=adversarial_texts, max_samples=config["n_samples"]-n_current_samples,
-                            batch_size=config["tts_batch_size"]//7,
-                            noise_scales=[0.98], noise_scale_ws=[0.98], length_scales=[0.75, 1.0, 1.25],
-                            output_dir=negative_train_output_dir, auto_reduce_batch_size=True,
-                            file_names=[uuid.uuid4().hex + ".wav" for i in range(config["n_samples"])]
-                            )
+                             batch_size=config["tts_batch_size"]//7,
+                             noise_scales=[0.98], noise_scale_ws=[0.98], length_scales=[0.75, 1.0, 1.25],
+                             output_dir=negative_train_output_dir, auto_reduce_batch_size=True,
+                             file_names=[uuid.uuid4().hex + ".wav" for i in range(config["n_samples"])]
+                             )
             torch.cuda.empty_cache()
         else:
             logging.warning(f"Skipping generation of negative clips for training, as ~{config['n_samples']} already exist")
 
         # Generate adversarial negative clips for testing
+        logging.info("Generating negative clips for testing")
+        if not os.path.exists(negative_test_output_dir):
+            os.mkdir(negative_test_output_dir)
         n_current_samples = len(os.listdir(negative_test_output_dir))
         if n_current_samples <= 0.95*config["n_samples_val"]:
             adversarial_texts = config["custom_negative_phrases"]
             for target_phrase in config["target_phrase"]:
-                adversarial_texts.append(generate_adversarial_texts(
+                adversarial_texts.extend(generate_adversarial_texts(
                     input_text=target_phrase,
                     N=config["n_samples_val"]//len(config["target_phrase"]),
                     include_partial_phrase=1.0,
                     include_input_words=0.2))
             generate_samples(text=adversarial_texts, max_samples=config["n_samples_val"]-n_current_samples,
-                            batch_size=config["tts_batch_size"]//7,
-                            noise_scales=[1.0], noise_scale_ws=[1.0], length_scales=[0.75, 1.0, 1.25],
-                            output_dir=negative_test_output_dir, auto_reduce_batch_size=True)
+                             batch_size=config["tts_batch_size"]//7,
+                             noise_scales=[1.0], noise_scale_ws=[1.0], length_scales=[0.75, 1.0, 1.25],
+                             output_dir=negative_test_output_dir, auto_reduce_batch_size=True)
             torch.cuda.empty_cache()
         else:
             logging.warning(f"Skipping generation of negative clips for testing, as ~{config['n_samples_val']} already exist")
@@ -551,34 +569,34 @@ if __name__ == '__main__':
     # Do Data Augmentation
     if args.augment_clips is True:
         if not os.path.exists(os.path.join(feature_save_dir, "positive_features_train.npy")):
-            logging.info("Augmenting generated clips...")
+            logging.info("Creating augmentation generators")
 
             positive_clips_train = [str(i) for i in Path(positive_train_output_dir).glob("*.wav")]*config["augmentation_rounds"]
             positive_clips_train_generator = augment_clips(positive_clips_train, total_length=config["total_length"],
-                                                        batch_size=config["augmentation_batch_size"],
-                                                        background_clip_paths=background_paths,
-                                                        RIR_paths=rir_paths)
+                                                           batch_size=config["augmentation_batch_size"],
+                                                           background_clip_paths=background_paths,
+                                                           RIR_paths=rir_paths)
 
             positive_clips_test = [str(i) for i in Path(positive_test_output_dir).glob("*.wav")]*config["augmentation_rounds"]
             positive_clips_test_generator = augment_clips(positive_clips_test, total_length=config["total_length"],
-                                                        batch_size=config["augmentation_batch_size"],
-                                                        background_clip_paths=background_paths,
-                                                        RIR_paths=rir_paths)
+                                                          batch_size=config["augmentation_batch_size"],
+                                                          background_clip_paths=background_paths,
+                                                          RIR_paths=rir_paths)
 
             negative_clips_train = [str(i) for i in Path(negative_train_output_dir).glob("*.wav")]*config["augmentation_rounds"]
             negative_clips_train_generator = augment_clips(negative_clips_train, total_length=config["total_length"],
-                                                        batch_size=config["augmentation_batch_size"],
-                                                        background_clip_paths=background_paths,
-                                                        RIR_paths=rir_paths)
+                                                           batch_size=config["augmentation_batch_size"],
+                                                           background_clip_paths=background_paths,
+                                                           RIR_paths=rir_paths)
 
             negative_clips_test = [str(i) for i in Path(negative_test_output_dir).glob("*.wav")]*config["augmentation_rounds"]
             negative_clips_test_generator = augment_clips(negative_clips_test, total_length=config["total_length"],
-                                                        batch_size=config["augmentation_batch_size"],
-                                                        background_clip_paths=background_paths,
-                                                        RIR_paths=rir_paths)
+                                                          batch_size=config["augmentation_batch_size"],
+                                                          background_clip_paths=background_paths,
+                                                          RIR_paths=rir_paths)
 
             # Compute features and save to disk via memmapped arrays
-            logging.info("Computer openwakeword features for generated samples...")
+            logging.info("Computing openwakeword features for generated samples")
             n_cpus = os.cpu_count()
             if n_cpus is None:
                 n_cpus = 1
@@ -588,25 +606,25 @@ if __name__ == '__main__':
                                             clip_duration=config["total_length"],
                                             output_file=os.path.join(feature_save_dir, "positive_features_train.npy"),
                                             device="gpu" if torch.cuda.is_available() else "cpu",
-                                            ncpu=n_cpus if not torch.cuda_is_available() else 1)
+                                            ncpu=n_cpus if not torch.cuda.is_available() else 1)
 
             compute_features_from_generator(negative_clips_train_generator, n_total=len(os.listdir(negative_train_output_dir)),
                                             clip_duration=config["total_length"],
                                             output_file=os.path.join(feature_save_dir, "negative_features_train.npy"),
                                             device="gpu" if torch.cuda.is_available() else "cpu",
-                                            ncpu=n_cpus if not torch.cuda_is_available() else 1)
+                                            ncpu=n_cpus if not torch.cuda.is_available() else 1)
 
             compute_features_from_generator(positive_clips_test_generator, n_total=len(os.listdir(positive_test_output_dir)),
                                             clip_duration=config["total_length"],
                                             output_file=os.path.join(feature_save_dir, "positive_features_test.npy"),
                                             device="gpu" if torch.cuda.is_available() else "cpu",
-                                            ncpu=n_cpus if not torch.cuda_is_available() else 1)
+                                            ncpu=n_cpus if not torch.cuda.is_available() else 1)
 
             compute_features_from_generator(negative_clips_test_generator, n_total=len(os.listdir(negative_test_output_dir)),
                                             clip_duration=config["total_length"],
                                             output_file=os.path.join(feature_save_dir, "negative_features_test.npy"),
                                             device="gpu" if torch.cuda.is_available() else "cpu",
-                                            ncpu=n_cpus if not torch.cuda_is_available() else 1)
+                                            ncpu=n_cpus if not torch.cuda.is_available() else 1)
         else:
             logging.warning("Openwakeword features already exist, skipping data augmentation and feature generation")
 
@@ -618,18 +636,28 @@ if __name__ == '__main__':
         oww = Model(n_classes=1, input_shape=input_shape, model_type=config["model_type"],
                     layer_dim=config["layer_size"], seconds_per_example=1280*input_shape[0]/16000)
 
-        # Create data and label transform functions for batch generation
+        # Create data transform function for batch generation to handle differ clip lengths (todo: write tests for this)
         def f(x, n=16):
             """Simple transformation function to ensure negative data is the appropriate shape for the model size"""
-            n_chunks = x.shape[1]//n
-            stacked = np.vstack((
-                [x[:, i:i+n, :] for i in range(n_chunks)]
-            ))
-            return stacked
+            if n > x.shape[1] or n < x.shape[1]:
+                x = np.vstack(x)
+                new_batch = np.array([x[i:i+n, :] for i in range(0, x.shape[0]-n, n)])
+            else:
+                return x
+            return new_batch
 
-        data_transforms = {key: f for key in config["negative_data_files"].keys()}
-        label_transforms = {key: lambda x: [1 for i in x] if key == "positive" else lambda x: [0 for i in x]
-                            for key in ["positive"] + config["negative_data_files"] + ["adversarial_negative"]}
+        # Create label transforms as needed for model (currently only supports binary classification models)
+        data_transforms = {key: f for key in config["feature_data_files"].keys()}
+        label_transforms = {}
+        for key in ["positive"] + list(config["feature_data_files"].keys()) + ["adversarial_negative"]:
+            if key == "positive":
+                label_transforms[key] = lambda x: [1 for i in x]
+            else:
+                label_transforms[key] = lambda x: [0 for i in x]
+
+        # Add generated positive and adversarial negative clips to the feature data files dictionary
+        config["feature_data_files"]['positive'] = os.path.join(feature_save_dir, "positive_features_train.npy")
+        config["feature_data_files"]['adversarial_negative'] = os.path.join(feature_save_dir, "negative_features_train.npy")
 
         # Make PyTorch data loaders for training and validation data
         batch_generator = mmap_batch_generator(
@@ -646,8 +674,13 @@ if __name__ == '__main__':
             def __iter__(self):
                 return self.generator
 
+        n_cpus = os.cpu_count()
+        if n_cpus is None:
+            n_cpus = 1
+        else:
+            n_cpus = n_cpus//2
         X_train = torch.utils.data.DataLoader(IterDataset(batch_generator),
-                                            batch_size=None, num_workers=8, prefetch_factor=16)
+                                              batch_size=None, num_workers=n_cpus, prefetch_factor=16)
 
         X_val_fp = np.load(config["false_positive_validation_data_path"])
         X_val_fp = np.array([X_val_fp[i:i+input_shape[0]] for i in range(0, X_val_fp.shape[0]-input_shape[0], 1)])  # reshape to match model
@@ -668,13 +701,6 @@ if __name__ == '__main__':
             batch_size=len(labels)
         )
 
-        # Run auto training and save model
-        steps = 100000
-        max_neg_weight = 1500
-        target_accuracy = 0.7
-        target_recall = 0.5
-        target_fp_per_hour = 0.2
-
         # Run auto training
         best_model = oww.auto_train(
             X_train=X_train,
@@ -684,7 +710,7 @@ if __name__ == '__main__':
             max_negative_weight=config["max_negative_weight"],
             target_val_accuracy=config["target_accuracy"],
             target_val_recall=config["target_recall"],
-            target_val_fp_per_hour=config["target_fp_per_hour"]
+            target_val_fp_per_hour=config["target_false_positives_per_hour"]
         )
 
         # Export the trained model to onnx and tflite formats

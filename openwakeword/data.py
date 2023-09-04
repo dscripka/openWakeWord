@@ -826,7 +826,6 @@ class mmap_batch_generator:
                 # Restart at zeroth index if an array reaches the end
                 if self.data_counter[label] >= self.shapes[label][0]:
                     self.data_counter[label] = 0
-                    # self.data[label] = np.load(self.data_files[label], mmap_mode='r')
 
                 # Get data from mmaped file
                 x = self.data[label][self.data_counter[label]:self.data_counter[label]+n]

@@ -69,7 +69,7 @@ feature_data_files:
   "ACAV100M_sample": "./openwakeword_features_ACAV100M_2000_hrs_16bit.npy"
 
 # Define the number of examples from each data file per batch. Note that the key names here
-# must correspond to those define in the `negative_data_files` dictionary above (except for
+# must correspond to those define in the `feature_data_files` dictionary above (except for
 # the `positive` and `adversarial_negative` keys, which are automatically defined). The sum
 # of the values for each key define the total batch size for training. Initial testing indicates
 # that batch sizes of 1024-4096 work will in practice.
@@ -88,7 +88,9 @@ layer_size: 32
 
 # Define training parameters. The values below are recommended defaults for most applications,
 # but unique deployment environments will likely require testing to determine which values
-# are the most appropriate.
+# are the most appropriate. Note that all "target_" values are determined from the validation data,
+# and since early-stopping is utilized, the final performance of the trained model
+# may be slighly overfit to the validation data.
 
 steps: 100000  # the maximum number of steps when training the model
 max_negative_weight: 1500  # the maximum weight to give negative samples during training to reduce false positives
