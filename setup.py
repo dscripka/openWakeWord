@@ -49,6 +49,7 @@ setuptools.setup(
                     'torch>=1.13.1,<2',
                     'torchaudio>=0.13.1,<1',
                     'torchinfo>=1.8.0,<2',
+                    'torchmetrics>=0.11.4,<1',
                     'speechbrain>=0.5.14,<1',
                     'audiomentations>=0.30.0,<1',
                     'torch-audiomentations>=0.11.0,<1',
@@ -61,9 +62,11 @@ setuptools.setup(
                     'pyyaml>=6.0,<7',
                     'tensorflow==2.8.1',
                     'tensorflow_probability==0.16.0',
-                    'protobuf==3.20',
+                    'protobuf>=3.20,<4',
                     'onnx_tf==1.10.0',
-                    'onnx==1.14.0'
+                    'onnx==1.14.0',
+                    'pronouncing>=0.2.0,<1',
+                    'datasets>=2.14.4,<3'
                 ]
     },
     author="David Scripka",
