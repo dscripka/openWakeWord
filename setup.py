@@ -46,13 +46,19 @@ setuptools.setup(
                 ],
         'full': [
                     'mutagen>=1.46.0,<2',
-                    'speechbrain>=0.5.13,<1',
+                    'torch>=1.13.1,<2',
+                    'torchaudio>=0.13.1,<1',
+                    'torchinfo>=1.8.0,<2',
+                    'speechbrain>=0.5.14,<1',
+                    'audiomentations>=0.30.0,<1',
+                    'torch-audiomentations>=0.11.0,<1',
+                    'tqdm>=4.64.0,<5',
                     'pytest>=7.2.0,<8',
                     'pytest-cov>=2.10.1,<3',
                     'pytest-flake8>=1.1.1,<2',
                     'pytest-mypy>=0.10.0,<1',
-                    'plotext>=5.2.7,<6',
-                    'sounddevice>=0.4.1,<1'
+                    'acoustics>=0.2.6,<1',
+                    'pyyaml>=6.0,<7'
                 ]
     },
     author="David Scripka",
