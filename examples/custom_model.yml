@@ -1,9 +1,15 @@
 ## Configuration file to be used with `train.py` to create custom wake word/phrase models
 
-# The target word/phrase to be detected by the model
-target_phrase: "hey jarvis"
+# The name of the model (will be used when creating directoires and when saving the final .onnx and .tflite files)
+model_name: "my_model"
+# The target word/phrase to be detected by the model. Adding multiple unique words/phrases will
+# still only train a binary model detection model, but it will activate on any one of the provided words/phrases.
+target_phrase:
+  - "hey jarvis"
 
-# The total length (in samples @ 16khz) of the clips created for training, should be larger for longer target phrases
+# The total length (in samples @ 16khz) of the positive clips used for training, after augmentations.
+# Should be large enough to contain the entire target word/phrase, with at least 0.75 seconds
+# before the start of the word/phrase, and at least 0.2 seconds after the end of the word/phrase.
 total_length: 32000
 
 # Specific phrases that you do *not* want the model to activate on, outside of those generated automatically via phoneme overlap
@@ -40,9 +46,8 @@ background_paths:
 
 # The location of pre-computed openwakeword features for false-positive validation data
 # If you do not have deployment environment validation data, a good general purpose dataset with
-# a reasonable mix of ~11 hours of speech, noise, and music is available here:
-# LINK TO FEATURES
-false_positive_validation_data_path: "./fp_val_data.npy"
+# a reasonable mix of ~11 hours of speech, noise, and music is available here: https://huggingface.co/datasets/davidscripka/openwakeword_features
+false_positive_validation_data_path: "./validation_set_features.npy"
 
 # The number of times to apply augmentations to the generated training data
 # Values greater than 1 reuse each generation that many times, producing overall unique
@@ -61,7 +66,7 @@ augmentation_rounds: 1
 # NVME SSD is recommended for optimal performance.
 
 feature_data_files:
-  "ACAV100M_sample": "./ACAV100M_sample.npy"
+  "ACAV100M_sample": "./openwakeword_features_ACAV100M_2000_hrs_16bit.npy"
 
 # Define the number of examples from each data file per batch. Note that the key names here
 # must correspond to those define in the `negative_data_files` dictionary above (except for
