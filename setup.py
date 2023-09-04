@@ -58,7 +58,12 @@ setuptools.setup(
                     'pytest-flake8>=1.1.1,<2',
                     'pytest-mypy>=0.10.0,<1',
                     'acoustics>=0.2.6,<1',
-                    'pyyaml>=6.0,<7'
+                    'pyyaml>=6.0,<7',
+                    'tensorflow==2.8.1',
+                    'tensorflow_probability==0.16.0',
+                    'protobuf==3.20',
+                    'onnx_tf==1.10.0',
+                    'onnx==1.14.0'
                 ]
     },
     author="David Scripka",
