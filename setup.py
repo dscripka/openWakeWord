@@ -26,7 +26,7 @@ def build_additional_requires():
 
 setuptools.setup(
     name="openwakeword",
-    version="0.5.0",
+    version="0.5.1",
     install_requires=[
         'onnxruntime>=1.10.0,<2',
         'tflite-runtime>=2.8.0,<3; platform_system == "Linux"',
@@ -42,7 +42,9 @@ setuptools.setup(
                     'flake8>=4.0,<4.1',
                     'pytest-mypy>=0.10.0,<1',
                     'types-requests',
-                    'types-PyYAML'
+                    'types-PyYAML',
+                    'mock>=5.1,<6',
+                    'types-mock>=5.1,<6'
                 ],
         'full': [
                     'mutagen>=1.46.0,<2',

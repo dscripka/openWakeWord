@@ -29,11 +29,16 @@
 # Imports
 import openwakeword
 import os
+import sys
+import logging
 import numpy as np
 from pathlib import Path
 import collections
 import pytest
 import platform
+import pickle
+import tempfile
+import mock
 
 
 # Tests
@@ -51,8 +56,67 @@ class TestModels:
         # Prediction on random data
         owwModel.predict(np.random.randint(-1000, 1000, 1280).astype(np.int16))
 
-        # Prediction on random data with different chunk size
-        owwModel.predict(np.random.randint(-1000, 1000, 1280*2).astype(np.int16))
+    def test_predict_with_different_frame_sizes(self):
+        # Test with binary model
+        owwModel1 = openwakeword.Model(wakeword_models=[
+                                        os.path.join("openwakeword", "resources", "models", "alexa_v0.1.onnx")
+                                      ], inference_framework="onnx")
+
+        owwModel2 = openwakeword.Model(wakeword_models=[
+                                        os.path.join("openwakeword", "resources", "models", "alexa_v0.1.onnx")
+                                      ], inference_framework="onnx")
+
+        # Prediction on random data with integer multiples of standard chunk size (1280 samples)
+        predictions1 = owwModel1.predict_clip(os.path.join("tests", "data", "alexa_test.wav"), chunk_size=1280)
+        predictions2 = owwModel2.predict_clip(os.path.join("tests", "data", "alexa_test.wav"), chunk_size=1280*2)
+        np.testing.assert_approx_equal(max([i['alexa_v0.1'] for i in predictions1]), max([i['alexa_v0.1'] for i in predictions2]), 5)
+
+        # Prediction on data with a chunk size not an integer multiple of 1280
+        predictions1 = owwModel1.predict_clip(os.path.join("tests", "data", "alexa_test.wav"), chunk_size=1024)
+        predictions2 = owwModel2.predict_clip(os.path.join("tests", "data", "alexa_test.wav"), chunk_size=1024*2)
+        np.testing.assert_approx_equal(max([i['alexa_v0.1'] for i in predictions1]), max([i['alexa_v0.1'] for i in predictions2]), 5)
+
+        # Test with multiclass model
+        owwModel1 = openwakeword.Model(wakeword_models=["timer"], inference_framework="onnx")
+        owwModel2 = openwakeword.Model(wakeword_models=["timer"], inference_framework="onnx")
+
+        # Prediction on random data with integer multiples of standard chunk size (1280 samples)
+        predictions1 = owwModel1.predict_clip(os.path.join("tests", "data", "alexa_test.wav"), chunk_size=1280)
+        predictions2 = owwModel2.predict_clip(os.path.join("tests", "data", "alexa_test.wav"), chunk_size=1280*2)
+        assert abs(max([i['1_minute_timer'] for i in predictions1]) - max([i['1_minute_timer'] for i in predictions2])) < 0.00001
+
+        # Prediction on data with a chunk size not an integer multiple of 1280
+        predictions1 = owwModel1.predict_clip(os.path.join("tests", "data", "alexa_test.wav"), chunk_size=1024)
+        predictions2 = owwModel2.predict_clip(os.path.join("tests", "data", "alexa_test.wav"), chunk_size=1024*2)
+        assert abs(max([i['1_minute_timer'] for i in predictions1]) - max([i['1_minute_timer'] for i in predictions2])) < 0.00001
+
+    def test_exception_handling_for_inference_framework(self):
+        with mock.patch.dict(sys.modules, {'onnxruntime': None}):
+            with pytest.raises(ValueError):
+                openwakeword.Model(wakeword_models=[
+                                                os.path.join("openwakeword", "resources", "models", "alexa_v0.1.onnx")
+                                            ], inference_framework="onnx")
+
+        with mock.patch.dict(sys.modules, {'tflite_runtime': None}):
+            openwakeword.Model(wakeword_models=[
+                                            os.path.join("openwakeword", "resources", "models", "alexa_v0.1.tflite")
+                                        ], inference_framework="tflite")
+
+    def test_predict_with_custom_verifier_model(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            # Train custom verifier model with random data
+            verifier_model = openwakeword.custom_verifier_model.train_verifier_model(np.random.random((2, 1536)), np.array([0, 1]))
+            pickle.dump(verifier_model, open(os.path.join(tmp_dir, "test_verifier.pkl"), "wb"))
+
+            # Load model with verifier
+            owwModel = openwakeword.Model(
+                wakeword_models=[os.path.join("openwakeword", "resources", "models", "alexa_v0.1.onnx")],
+                inference_framework="onnx",
+                custom_verifier_models={"alexa_v0.1": os.path.join(tmp_dir, "test_verifier.pkl")},
+                custom_verifier_threshold=0.0
+            )
+
+            owwModel.predict(np.random.randint(-1000, 1000, 1280).astype(np.int16))
 
     def test_load_pretrained_model_by_name(self):
         # Load model with defaults
@@ -109,31 +173,37 @@ class TestModels:
             assert 1 == 1
         else:
             # Load model with defaults
-            owwModel = openwakeword.Model(enable_speex_noise_suppression=True)
+            try:
+                owwModel = openwakeword.Model(enable_speex_noise_suppression=True)
 
-            # Get clips for each model (assumes that test clips will have the model name in the filename)
-            test_dict = {}
-            for mdl_name in owwModel.models.keys():
-                all_clips = [str(i) for i in Path(os.path.join("tests", "data")).glob("*.wav")]
-                test_dict[mdl_name] = [i for i in all_clips if mdl_name in i]
+                # Get clips for each model (assumes that test clips will have the model name in the filename)
+                test_dict = {}
+                for mdl_name in owwModel.models.keys():
+                    all_clips = [str(i) for i in Path(os.path.join("tests", "data")).glob("*.wav")]
+                    test_dict[mdl_name] = [i for i in all_clips if mdl_name in i]
 
-            # Predict
-            for model, clips in test_dict.items():
-                for clip in clips:
-                    # Get predictions for reach frame in the clip
-                    predictions = owwModel.predict_clip(clip)
-                    owwModel.reset()  # reset after each clip to ensure independent results
+                # Predict
+                for model, clips in test_dict.items():
+                    for clip in clips:
+                        # Get predictions for reach frame in the clip
+                        predictions = owwModel.predict_clip(clip)
+                        owwModel.reset()  # reset after each clip to ensure independent results
 
-                    # Make predictions dictionary flatter
-                    predictions_flat = collections.defaultdict(list)
-                    [predictions_flat[key].append(i[key]) for i in predictions for key in i.keys()]
+                        # Make predictions dictionary flatter
+                        predictions_flat = collections.defaultdict(list)
+                        [predictions_flat[key].append(i[key]) for i in predictions for key in i.keys()]
 
-                # Check scores against default threshold (0.5)
-                for key in predictions_flat.keys():
-                    if key in clip:
-                        assert max(predictions_flat[key]) >= 0.5
-                    else:
-                        assert max(predictions_flat[key]) < 0.5
+                    # Check scores against default threshold (0.5)
+                    for key in predictions_flat.keys():
+                        if key in clip:
+                            assert max(predictions_flat[key]) >= 0.5
+                        else:
+                            assert max(predictions_flat[key]) < 0.5
+            except ImportError:
+                logging.warning("Attemped to test Speex noise cancelling functionality, but the 'speexdsp_ns' library was not installed!"
+                                " If you want these tests to be run, install this library as shown in the openwakeword documentation."
+                                )
+                assert 1 == 1
 
     def test_models_with_vad(self):
         # Load model with defaults
@@ -201,8 +271,8 @@ class TestModels:
 
     def test_get_positive_prediction_frames(self):
         owwModel = openwakeword.Model(wakeword_models=[
-                                        os.path.join("openwakeword", "resources", "models", "alexa_v0.1.tflite")
-                                      ], inference_framework="tflite")
+                                        os.path.join("openwakeword", "resources", "models", "alexa_v0.1.onnx")
+                                      ], inference_framework="onnx")
 
         clip = os.path.join("tests", "data", "alexa_test.wav")
         features = owwModel._get_positive_prediction_frames(clip)
