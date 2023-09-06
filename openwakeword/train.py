@@ -303,28 +303,28 @@ class Model(nn.Module):
         model_to_save = copy.deepcopy(model)
         torch.onnx.export(model_to_save.to("cpu"), torch.rand(self.input_shape)[None, ], os.path.join(output_dir, model_name + ".onnx"))
 
-        # Convert to tflite from onnx model
+        # Save tflite model
+        self.convert_onnx_to_tflite(os.path.join(output_dir, model_name + ".onnx"), os.path.join(output_dir, model_name + ".tflite"))
+
+        return None
+
+    def convert_onnx_to_tflite(self, onnx_model_path, output_path):
+        """Converts an ONNX version of an openwakeword model to the Tensorflow tflite format."""
+        # imports
         import onnx
         from onnx_tf.backend import prepare
         import tensorflow as tf
 
-        # package versions
-        # tensorflow==2.8.1
-        # tensorflow_probability==0.16.0
-        # protobuf==3.20
-        # onnx_tf==1.10.0
-        # onnx==1.14.0
-
-        onnx_model = onnx.load(os.path.join(output_dir, model_name + ".onnx"))
+        # Convert to tflite from onnx model
+        onnx_model = onnx.load(onnx_model_path)
         tf_rep = prepare(onnx_model, device="CPU")
         with tempfile.TemporaryDirectory() as tmp_dir:
             tf_rep.export_graph(os.path.join(tmp_dir, "tf_model"))
-
             converter = tf.lite.TFLiteConverter.from_saved_model(os.path.join(tmp_dir, "tf_model"))
             tflite_model = converter.convert()
 
-            logging.info(f"Saving tflite mode as '{os.path.join(output_dir, model_name + '.tflite')}'")
-            with open(os.path.join(output_dir, model_name + ".tflite"), 'wb') as f:
+            logging.info(f"Saving tflite mode to '{output_path}'")
+            with open(output_path, 'wb') as f:
                 f.write(tflite_model)
 
         return None
