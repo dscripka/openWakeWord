@@ -303,30 +303,6 @@ class Model(nn.Module):
         model_to_save = copy.deepcopy(model)
         torch.onnx.export(model_to_save.to("cpu"), torch.rand(self.input_shape)[None, ], os.path.join(output_dir, model_name + ".onnx"))
 
-        # Save tflite model
-        self.convert_onnx_to_tflite(os.path.join(output_dir, model_name + ".onnx"), os.path.join(output_dir, model_name + ".tflite"))
-
-        return None
-
-    def convert_onnx_to_tflite(self, onnx_model_path, output_path):
-        """Converts an ONNX version of an openwakeword model to the Tensorflow tflite format."""
-        # imports
-        import onnx
-        from onnx_tf.backend import prepare
-        import tensorflow as tf
-
-        # Convert to tflite from onnx model
-        onnx_model = onnx.load(onnx_model_path)
-        tf_rep = prepare(onnx_model, device="CPU")
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tf_rep.export_graph(os.path.join(tmp_dir, "tf_model"))
-            converter = tf.lite.TFLiteConverter.from_saved_model(os.path.join(tmp_dir, "tf_model"))
-            tflite_model = converter.convert()
-
-            logging.info(f"Saving tflite mode to '{output_path}'")
-            with open(output_path, 'wb') as f:
-                f.write(tflite_model)
-
         return None
 
     def train_model(self, X, max_steps, warmup_steps, hold_steps, X_val=None,
@@ -433,6 +409,28 @@ class Model(nn.Module):
 
             if step_ndx == max_steps-1:
                 break
+
+# Separate function to convert onnx models to tflite format
+def convert_onnx_to_tflite(self, onnx_model_path, output_path):
+    """Converts an ONNX version of an openwakeword model to the Tensorflow tflite format."""
+    # imports
+    import onnx
+    from onnx_tf.backend import prepare
+    import tensorflow as tf
+
+    # Convert to tflite from onnx model
+    onnx_model = onnx.load(onnx_model_path)
+    tf_rep = prepare(onnx_model, device="CPU")
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tf_rep.export_graph(os.path.join(tmp_dir, "tf_model"))
+        converter = tf.lite.TFLiteConverter.from_saved_model(os.path.join(tmp_dir, "tf_model"))
+        tflite_model = converter.convert()
+
+        logging.info(f"Saving tflite mode to '{output_path}'")
+        with open(output_path, 'wb') as f:
+            f.write(tflite_model)
+
+    return None
 
 
 if __name__ == '__main__':
@@ -713,5 +711,9 @@ if __name__ == '__main__':
             target_val_fp_per_hour=config["target_false_positives_per_hour"]
         )
 
-        # Export the trained model to onnx and tflite formats
+        # Export the trained model to onnx
         oww.export_model(model=best_model, model_name=config["model_name"], output_dir=config["output_dir"])
+
+        # Convert the model from onnx to tflite format
+        convert_onnx_to_tflite(os.path.join(config["output_dir"], config["model_name"]),
+                               os.path.join(config["output_dir"], config["model_name"] + "tflite"))
