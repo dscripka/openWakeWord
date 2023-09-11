@@ -411,7 +411,7 @@ class Model(nn.Module):
                 break
 
 # Separate function to convert onnx models to tflite format
-def convert_onnx_to_tflite(self, onnx_model_path, output_path):
+def convert_onnx_to_tflite(onnx_model_path, output_path):
     """Converts an ONNX version of an openwakeword model to the Tensorflow tflite format."""
     # imports
     import onnx
