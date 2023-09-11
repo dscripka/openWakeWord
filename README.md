@@ -206,7 +206,9 @@ While the models are trained with background noise to increase robustness, in so
 
 # Training New Models
 
-Training new models is conceptually simple, and the entire process is demonstrated in a [tutorial notebook](notebooks/training_models.ipynb).
+Recent versions of openWakeWord support an [automatic model training](openwakeword/train.py) utility that greatly simplifies the process of training custom models. See the example [notebook](notebooks/automatic_model_training.ipynb), or run it in [Google Colab](https://colab.research.google.com/drive/1yyFH-fpguX2BTAW8wSQxTrJnJTM-0QAd?usp=sharing) for an end-to-end example of how the process works.
+
+For users interested in understanding the fundamental concepts behind model training there is a more detailed, educational [tutorial notebook](notebooks/training_models.ipynb) also available. However, this specific notebook is not intended for training production models, and the automated process above is recommended for that purpose.
 
 Fundamentally, a new model requires two data generation and collection steps:
 
@@ -229,7 +231,7 @@ Future release road maps may have non-english support. In particular, [Mycroft.A
 - While the ONNX runtime [does support javascript](https://onnxruntime.ai/docs/get-started/with-javascript.html), much of the other functionality required for openWakeWord models would need to be ported. This is not currently on the roadmap, but please open an issue/start a discussion if this feature is of particular interest.
 
 **Is there a C++ version of openWakeWord?**
-- While the ONNX runtime [also has a C++ API](https://onnxruntime.ai/docs/get-started/with-cpp.html), there isn't an official C++ implementation of the full openWakeWord library. However, [@synesthesiam](https://github.com/synesthesiam) has created a [C++ version](https://github.com/rhasspy/openWakeWord-cpp) of openWakeWord with the essential functionality implemented.
+- While the ONNX runtime [also has a C++ API](https://onnxruntime.ai/docs/get-started/with-cpp.html), there isn't an official C++ implementation of the full openWakeWord library. However, [@synesthesiam](https://github.com/synesthesiam) has created a [C++ version](https://github.com/rhasspy/openWakeWord-cpp) of openWakeWord with basic functionality implemented.
 
 **Why are there three separate models instead of just one?**
 - Separating the models was an intentional choice to provide flexibility and optimize the efficiency of the end-to-end prediction process. For example, with separate melspectrogram, embedding, and prediction models, each one can operate on different size inputs of audio to optimize overall latency and share computations between models. It certainly is possible to make a combined model with all of the steps integrated, though, if that was a requirement of a particular use case.
