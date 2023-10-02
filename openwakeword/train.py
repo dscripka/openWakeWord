@@ -410,6 +410,7 @@ class Model(nn.Module):
             if step_ndx == max_steps-1:
                 break
 
+
 # Separate function to convert onnx models to tflite format
 def convert_onnx_to_tflite(onnx_model_path, output_path):
     """Converts an ONNX version of an openwakeword model to the Tensorflow tflite format."""
@@ -697,14 +698,15 @@ if __name__ == '__main__':
             batch_size=len(X_val_fp_labels)
         )
 
-        X_val = np.vstack((
-            np.load(os.path.join(feature_save_dir, "positive_features_test.npy")),
-            np.load(os.path.join(feature_save_dir, "negative_features_test.npy"))
-        ))
-        labels = np.hstack((np.ones(X_val.shape[0]//2), np.zeros(X_val.shape[0]//2))).astype(np.float32)
+        X_val_pos = np.load(os.path.join(feature_save_dir, "positive_features_test.npy"))
+        X_val_neg = np.load(os.path.join(feature_save_dir, "negative_features_test.npy"))
+        labels = np.hstack((np.ones(X_val_pos.shape[0]), np.zeros(X_val_neg.shape[0]))).astype(np.float32)
 
         X_val = torch.utils.data.DataLoader(
-            torch.utils.data.TensorDataset(torch.from_numpy(X_val), torch.from_numpy(labels)),
+            torch.utils.data.TensorDataset(
+                torch.from_numpy(np.vstack((X_val_pos, X_val_neg))),
+                torch.from_numpy(labels)
+                ),
             batch_size=len(labels)
         )
 
