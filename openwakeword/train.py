@@ -261,7 +261,7 @@ class Model(nn.Module):
         # Merge best models
         if len(self.best_models) == 0:
             logging.warning("WARNING!\nNo checkpoint with metrics >= than target values was found!\n"
-                            "Consider generating more examples, or reducing target metrics. "
+                            "Consider generating more positive and negative examples for training or reducing target metrics. "
                             "Returning the model corresponding to the last training step.\n\n")
             combined_model = self.model
         else:
