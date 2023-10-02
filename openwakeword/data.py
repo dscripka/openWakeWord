@@ -946,6 +946,7 @@ def generate_adversarial_texts(input_text: str, N: int, include_partial_phrase: 
             logging.warning(f"The word '{word}' was not found in the pronunciation dictionary! "
                             "Using the DeepPhonemizer library to predict the phonemes.")
             phones = phonemizer(word, lang='en_us')
+            logging.warning(f"Phones for '{word}': {phones}")
             word_phones.append(re.sub(r"[\]|\[]", "", re.sub(r"\]\[", " ", phones)))
         elif isinstance(phones[0], list):
             logging.warning(f"There are multiple pronunciations for the word '{word}'.")

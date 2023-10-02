@@ -201,7 +201,7 @@ class Model(nn.Module):
         val_set_hrs = 11.3
 
         # Sequence 1
-        logging.info("Starting training sequence 1...")
+        logging.info("#"*50 + "\nStarting training sequence 1...\n" + "#"*50)
         lr = 0.0001
         weights = np.linspace(1, max_negative_weight, int(steps)).tolist()
         val_steps = np.linspace(steps-int(steps*0.25), steps, 20).astype(np.int64)
@@ -216,7 +216,7 @@ class Model(nn.Module):
                     target_val_accuracy=target_val_accuracy, target_val_recall=target_val_recall)
 
         # Sequence 2
-        logging.info("Starting training sequence 2...")
+        logging.info("#"*50 + "\nStarting training sequence 2...\n" + "#"*50)
         lr = lr/10
         steps = steps/10
 
@@ -238,7 +238,7 @@ class Model(nn.Module):
                     target_val_accuracy=target_val_accuracy, target_val_recall=target_val_recall)
 
         # Sequence 3
-        logging.info("Starting training sequence 3...")
+        logging.info("#"*50 + "\nStarting training sequence 3...\n" + "#"*50)
         lr = lr/10
 
         # Adjust weights as needed based on false positive per hour performance from second sequence
@@ -260,10 +260,10 @@ class Model(nn.Module):
 
         # Merge best models
         if len(self.best_models) == 0:
-            logging.warning("No checkpoint with metrics >= than target values was found!\n"
-                            "Consider generating more examples, or reducing target metrics."
+            logging.warning("WARNING!\nNo checkpoint with metrics >= than target values was found!\n"
+                            "Consider generating more examples, or reducing target metrics. "
                             "Returning the model corresponding to the last training step.\n\n")
-            return self.model
+            combined_model = self.model
         else:
             logging.info("Merging best checkpoints into single model...")
             combined_model = self.average_models(models=self.best_models)
@@ -299,7 +299,7 @@ class Model(nn.Module):
                              "Use the `export_to_onnx` function instead.")
 
         # Save ONNX model
-        logging.info(f"Saving ONNX mode as '{os.path.join(output_dir, model_name + '.onnx')}'")
+        logging.info(f"####\nSaving ONNX mode as '{os.path.join(output_dir, model_name + '.onnx')}'")
         model_to_save = copy.deepcopy(model)
         torch.onnx.export(model_to_save.to("cpu"), torch.rand(self.input_shape)[None, ], os.path.join(output_dir, model_name + ".onnx"))
 
@@ -426,7 +426,7 @@ def convert_onnx_to_tflite(onnx_model_path, output_path):
         converter = tf.lite.TFLiteConverter.from_saved_model(os.path.join(tmp_dir, "tf_model"))
         tflite_model = converter.convert()
 
-        logging.info(f"Saving tflite mode to '{output_path}'")
+        logging.info(f"####\nSaving tflite mode to '{output_path}'")
         with open(output_path, 'wb') as f:
             f.write(tflite_model)
 
@@ -463,6 +463,13 @@ if __name__ == '__main__':
         default="False",
         required=False
     )
+    parser.add_argument(
+        "--overwrite",
+        help="Overwrite existing openwakeword features when the --augment_clips flag is used",
+        action="store_true",
+        default="False",
+        required=False
+    )
 
     args = parser.parse_args()
     config = yaml.load(open(args.training_config, 'r').read(), yaml.Loader)
@@ -486,11 +493,15 @@ if __name__ == '__main__':
 
     # Get paths for impulse response and background audio files
     rir_paths = [i.path for j in config["rir_paths"] for i in os.scandir(j)]
-    background_paths = [i.path for j in config["background_paths"] for i in os.scandir(j)]
+    background_paths = []
+    if len(config["background_paths_duplication_rate"]) != len(config["background_paths"]):
+        config["background_paths_duplication_rate"] = [1]*len(config["background_paths"])
+    for background_path, duplication_rate in zip(config["background_paths"], config["background_paths_duplication_rate"]):
+        background_paths.extend([i.path for i in os.scandir(background_path)]*duplication_rate)
 
     if args.generate_clips is True:
         # Generate positive clips for training
-        logging.info("Generating positive clips for training")
+        logging.info("#"*50 + "\nGenerating positive clips for training\n" + "#"*50)
         if not os.path.exists(positive_train_output_dir):
             os.mkdir(positive_train_output_dir)
         n_current_samples = len(os.listdir(positive_train_output_dir))
@@ -507,7 +518,7 @@ if __name__ == '__main__':
             logging.warning(f"Skipping generation of positive clips for training, as ~{config['n_samples']} already exist")
 
         # Generate positive clips for testing
-        logging.info("Generating positive clips for testing")
+        logging.info("#"*50 + "\nGenerating positive clips for testing\n" + "#"*50)
         if not os.path.exists(positive_test_output_dir):
             os.mkdir(positive_test_output_dir)
         n_current_samples = len(os.listdir(positive_test_output_dir))
@@ -521,7 +532,7 @@ if __name__ == '__main__':
             logging.warning(f"Skipping generation of positive clips testing, as ~{config['n_samples_val']} already exist")
 
         # Generate adversarial negative clips for training
-        logging.info("Generating negative clips for training")
+        logging.info("#"*50 + "\nGenerating negative clips for training\n" + "#"*50)
         if not os.path.exists(negative_train_output_dir):
             os.mkdir(negative_train_output_dir)
         n_current_samples = len(os.listdir(negative_train_output_dir))
@@ -544,7 +555,7 @@ if __name__ == '__main__':
             logging.warning(f"Skipping generation of negative clips for training, as ~{config['n_samples']} already exist")
 
         # Generate adversarial negative clips for testing
-        logging.info("Generating negative clips for testing")
+        logging.info("#"*50 + "\nGenerating negative clips for testing\n" + "#"*50)
         if not os.path.exists(negative_test_output_dir):
             os.mkdir(negative_test_output_dir)
         n_current_samples = len(os.listdir(negative_test_output_dir))
@@ -566,9 +577,7 @@ if __name__ == '__main__':
 
     # Do Data Augmentation
     if args.augment_clips is True:
-        if not os.path.exists(os.path.join(feature_save_dir, "positive_features_train.npy")):
-            logging.info("Creating augmentation generators")
-
+        if not os.path.exists(os.path.join(feature_save_dir, "positive_features_train.npy")) or args.overwrite is True:
             positive_clips_train = [str(i) for i in Path(positive_train_output_dir).glob("*.wav")]*config["augmentation_rounds"]
             positive_clips_train_generator = augment_clips(positive_clips_train, total_length=config["total_length"],
                                                            batch_size=config["augmentation_batch_size"],
@@ -594,7 +603,7 @@ if __name__ == '__main__':
                                                           RIR_paths=rir_paths)
 
             # Compute features and save to disk via memmapped arrays
-            logging.info("Computing openwakeword features for generated samples")
+            logging.info("#"*50 + "\nComputing openwakeword features for generated samples\n" + "#"*50)
             n_cpus = os.cpu_count()
             if n_cpus is None:
                 n_cpus = 1
@@ -715,5 +724,5 @@ if __name__ == '__main__':
         oww.export_model(model=best_model, model_name=config["model_name"], output_dir=config["output_dir"])
 
         # Convert the model from onnx to tflite format
-        convert_onnx_to_tflite(os.path.join(config["output_dir"], config["model_name"]),
-                               os.path.join(config["output_dir"], config["model_name"] + "tflite"))
+        convert_onnx_to_tflite(os.path.join(config["output_dir"], config["model_name"] + ".onnx"),
+                               os.path.join(config["output_dir"], config["model_name"] + ".tflite"))
