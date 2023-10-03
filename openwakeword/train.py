@@ -31,6 +31,7 @@ class Model(nn.Module):
         self.seconds_per_example = seconds_per_example
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         self.best_models = []
+        self.best_model_scores = []
         self.best_val_fp = 1000
         self.best_val_accuracy = 0
         self.best_val_recall = 0
@@ -259,14 +260,29 @@ class Model(nn.Module):
                     target_val_accuracy=target_val_accuracy, target_val_recall=target_val_recall)
 
         # Merge best models
-        if len(self.best_models) == 0:
-            logging.warning("WARNING!\nNo checkpoint with metrics >= than target values was found!\n"
-                            "Consider generating more positive and negative examples for training or reducing target metrics. "
-                            "Returning the model corresponding to the last training step.\n\n")
-            combined_model = self.model
+        logging.info("Merging checkpoints above the 90th percentile into single model...")
+        accuracy_percentile = np.percentile(self.history["val_accuracy"], 90)
+        recall_percentile = np.percentile(self.history["val_recall"], 90)
+        fp_percentile = np.percentile(self.history["val_fp_per_hr"], 10)
+
+        # Show warning if 90th percentile is above/below targets
+        if accuracy_percentile < target_val_accuracy or recall_percentile < target_val_recall or \
+                fp_percentile > target_val_fp_per_hour:
+            logging.warning("\nWARNING!\nNo checkpoint with metrics better than the target values was found!\n"
+                            "Consider generating more positive and negative examples for training or reducing target metrics.")
+
+        # Get models above the 90th percentile
+        models = []
+        for model, score in zip(self.best_models, self.best_model_scores):
+            if score["val_accuracy"] >= accuracy_percentile and \
+                    score["val_recall"] >= recall_percentile and \
+                    score["val_fp_per_hr"] <= fp_percentile:
+                models.append(model)
+
+        if len(models) > 0:
+            combined_model = self.average_models(models=models)
         else:
-            logging.info("Merging best checkpoints into single model...")
-            combined_model = self.average_models(models=self.best_models)
+            combined_model = self.model
 
         # Report validation metrics for combined model
         with torch.no_grad():
@@ -396,13 +412,15 @@ class Model(nn.Module):
                 self.history["val_accuracy"].append(val_acc.detach().cpu().numpy())
                 self.history["val_recall"].append(val_recall)
 
-                # Save models with a validation score below a given threshold
-                # print(val_fp_per_hr, self.history["val_accuracy"][-1], self.history["val_recall"][-1])
-                if val_fp_per_hr <= max(self.best_val_fp, max_val_fp_per_hr) and \
-                        self.history["val_accuracy"][-1] >= target_val_accuracy and \
-                        self.history["val_recall"][-1] >= target_val_recall:
+                # Save models with a validation score above/below the 90th percentile
+                # of the validation scores up to that point
+                if val_fp_per_hr <= np.percentile(self.history["val_fp_per_hr"], 10) and \
+                        self.history["val_accuracy"][-1] >= np.percentile(self.history["val_accuracy"], 90) and \
+                        self.history["val_recall"][-1] >= np.percentile(self.history["val_recall"], 90):
                     # logging.info("Saving checkpoint with metrics >= to targets!")
                     self.best_models.append(copy.deepcopy(self.model))
+                    self.best_model_scores.append({"val_fp_per_hr": val_fp_per_hr, "val_accuracy": self.history["val_accuracy"][-1],
+                                                   "val_recall": self.history["val_recall"][-1]})
                     self.best_val_fp = val_fp_per_hr
                     self.best_val_recall = self.history["val_recall"][-1]
                     self.best_val_accuracy = self.history["val_accuracy"][-1]
@@ -439,9 +457,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--training_config",
-        help="The path to the training config file",
+        help="The path to the training config file (required)",
         type=str,
-        required=True
+        required=True,
+        metavar=""
     )
     parser.add_argument(
         "--generate_clips",
@@ -458,15 +477,15 @@ if __name__ == '__main__':
         required=False
     )
     parser.add_argument(
-        "--train_model",
-        help="Execute the model training process",
+        "--overwrite",
+        help="Overwrite existing openwakeword features when the --augment_clips flag is used",
         action="store_true",
         default="False",
         required=False
     )
     parser.add_argument(
-        "--overwrite",
-        help="Overwrite existing openwakeword features when the --augment_clips flag is used",
+        "--train_model",
+        help="Execute the model training process",
         action="store_true",
         default="False",
         required=False
