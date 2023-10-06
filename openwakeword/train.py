@@ -459,8 +459,7 @@ if __name__ == '__main__':
         "--training_config",
         help="The path to the training config file (required)",
         type=str,
-        required=True,
-        metavar=""
+        required=True
     )
     parser.add_argument(
         "--generate_clips",
