@@ -68,7 +68,8 @@ setuptools.setup(
                     'onnx_tf==1.10.0',
                     'onnx==1.14.0',
                     'pronouncing>=0.2.0,<1',
-                    'datasets>=2.14.4,<3'
+                    'datasets>=2.14.4,<3',
+                    'deep-phonemizer==0.0.19'
                 ]
     },
     author="David Scripka",
