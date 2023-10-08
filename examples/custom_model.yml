@@ -28,9 +28,9 @@ augmentation_batch_size: 16
 # The path to a fork of the piper-sample-generator repository for TTS (https://github.com/dscripka/piper-sample-generator)
 piper_sample_generator_path: "./piper-sample-generator"
 
-# The output directory for the generated synthetic clips and openwakeword features
+# The output directory for the generated synthetic clips, openwakeword features, and trained models
 # Sub-directories will be automatically created for train and test clips for both positive and negative examples
-output_dir: "./generated_data"
+output_dir: "./my_custom_model"
 
 # The directories containing Room Impulse Response recordings
 rir_paths:
