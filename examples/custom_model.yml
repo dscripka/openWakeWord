@@ -2,15 +2,11 @@
 
 # The name of the model (will be used when creating directoires and when saving the final .onnx and .tflite files)
 model_name: "my_model"
+
 # The target word/phrase to be detected by the model. Adding multiple unique words/phrases will
 # still only train a binary model detection model, but it will activate on any one of the provided words/phrases.
 target_phrase:
   - "hey jarvis"
-
-# The total length (in samples @ 16khz) of the positive clips used for training, after augmentations.
-# Should be large enough to contain the entire target word/phrase, with at least 0.75 seconds
-# before the start of the word/phrase, and at least 0.2 seconds after the end of the word/phrase.
-total_length: 32000
 
 # Specific phrases that you do *not* want the model to activate on, outside of those generated automatically via phoneme overlap
 # This can be a good way to reduce false positives if you notice that, in practice, certain words or phrases are problematic
@@ -94,12 +90,12 @@ layer_size: 32
 
 # Define training parameters. The values below are recommended defaults for most applications,
 # but unique deployment environments will likely require testing to determine which values
-# are the most appropriate. Note that all "target_" values are determined from the validation data,
-# and since early-stopping is utilized, the final performance of the trained model
-# may be slighly overfit to the validation data.
+# are the most appropriate.
 
-steps: 50000  # the maximum number of steps when training the model
-max_negative_weight: 1500  # the maximum weight to give negative samples during training to reduce false positives
-target_accuracy: 0.7  # the target validation set accuracy for wake word/phrase detection
-target_recall: 0.5  # the target validation recall for wake word/phrase detection
-target_false_positives_per_hour: 0.2  # the maximum validation false positive rate per hour
+# The maximum number of steps to train the model
+steps: 50000
+
+# The maximum negative weight and target false positives per hour, used to control the auto training process
+# The target false positive rate may not be achieved, and adjusting the maximum negative weight may be necessary
+max_negative_weight: 1500
+target_false_positives_per_hour: 0.2
