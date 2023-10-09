@@ -40,6 +40,9 @@ import pickle
 import tempfile
 import mock
 
+# Download models needed for tests
+openwakeword.utils.download_models()
+
 
 # Tests
 class TestModels:

@@ -540,7 +540,7 @@ def download_file(url, target_directory, file_size=None):
             total_size = int(r.headers.get('content-length', 0))
             progress_bar = tqdm(total=total_size, unit='iB', unit_scale=True, desc=f"{local_filename}")
 
-        with open(local_filename, 'wb') as f:
+        with open(os.path.join(target_directory, local_filename), 'wb') as f:
             for chunk in r.iter_content(chunk_size=8192):
                 f.write(chunk)
                 progress_bar.update(len(chunk))
@@ -566,6 +566,8 @@ def download_models(
     Returns:
         None
     """
+    if not isinstance(model_names, list):
+        raise ValueError("The model_names argument must be a list of strings")
 
     # Always download melspectrogram and embedding models, if they don't already exist
     for feature_model in openwakeword.FEATURE_MODELS.values():
@@ -588,6 +590,7 @@ def download_models(
             if url != []:
                 if not os.path.exists(os.path.join(target_directory, url[0].split("/")[-1])):
                     download_file(url[0], target_directory)
+                    download_file(url[0].replace(".tflite", ".onnx"), target_directory)
     else:
         print(official_model_urls)
         for official_model_url in official_model_urls:

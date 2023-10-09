@@ -1,2 +1,0 @@
-*.onnx filter=lfs diff=lfs merge=lfs -text
-*.tflite filter=lfs diff=lfs merge=lfs -text
