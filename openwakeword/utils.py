@@ -573,6 +573,11 @@ def download_models(
             download_file(feature_model["download_url"], target_directory)
             download_file(feature_model["download_url"].replace(".tflite", ".onnx"), target_directory)
 
+    # Always download VAD models, if they don't already exist
+    for vad_model in openwakeword.VAD_MODELS.values():
+        if not os.path.exists(os.path.join(target_directory, vad_model["download_url"].split("/")[-1])):
+            download_file(vad_model["download_url"], target_directory)
+
     # Get all model urls
     official_model_urls = [i["download_url"] for i in openwakeword.MODELS.values()]
     official_model_names = [i["download_url"].split("/")[-1] for i in openwakeword.MODELS.values()]
@@ -581,11 +586,14 @@ def download_models(
         for model_name in model_names:
             url = [i for i, j in zip(official_model_urls, official_model_names) if model_name in j]
             if url != []:
-                download_file(url[0], target_directory)
+                if not os.path.exists(os.path.join(target_directory, url[0].split("/")[-1])):
+                    download_file(url[0], target_directory)
     else:
+        print(official_model_urls)
         for official_model_url in official_model_urls:
-            download_file(official_model_url, target_directory)
-            download_file(official_model_url.replace(".tflite", ".onnx"), target_directory)
+            if not os.path.exists(os.path.join(target_directory, official_model_url.split("/")[-1])):
+                download_file(official_model_url, target_directory)
+                download_file(official_model_url.replace(".tflite", ".onnx"), target_directory)
 
 
 # Handle deprecated arguments and naming (thanks to https://stackoverflow.com/a/74564394)
