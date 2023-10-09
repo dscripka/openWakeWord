@@ -32,7 +32,8 @@ setuptools.setup(
         'tflite-runtime>=2.8.0,<3; platform_system == "Linux"',
         'tqdm>=4.0,<5.0',
         'scipy>=1.3,<2',
-        'scikit-learn>=1,<2'
+        'scikit-learn>=1,<2',
+        'requests>=2.0,<3',
     ],
     extras_require={
         'test': [
