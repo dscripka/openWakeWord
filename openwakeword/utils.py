@@ -570,6 +570,8 @@ def download_models(
         raise ValueError("The model_names argument must be a list of strings")
 
     # Always download melspectrogram and embedding models, if they don't already exist
+    if not os.path.exists(target_directory):
+        os.makedirs(target_directory)
     for feature_model in openwakeword.FEATURE_MODELS.values():
         if not os.path.exists(os.path.join(target_directory, feature_model["download_url"].split("/")[-1])):
             download_file(feature_model["download_url"], target_directory)
