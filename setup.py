@@ -43,7 +43,8 @@ setuptools.setup(
                     'flake8>=4.0,<4.1',
                     'pytest-mypy>=0.10.0,<1',
                     'mock>=5.1,<6',
-                    'types-mock>=5.1,<6'
+                    'types-mock>=5.1,<6',
+                    'types-requests>=2.0,<3'
                 ],
         'full': [
                     'mutagen>=1.46.0,<2',
