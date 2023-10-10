@@ -67,7 +67,7 @@ class Model():
                                    with VAD scores above the threshold will be returned. The default value (0),
                                    disables voice activity detection entirely.
             custom_verifier_models (dict): A dictionary of paths to custom verifier models, where
-                                           the keys are the model names (corresponding to the openwakeword.models
+                                           the keys are the model names (corresponding to the openwakeword.MODELS
                                            attribute) and the values are the filepaths of the
                                            custom verifier models.
             custom_verifier_threshold (float): The score threshold to use a custom verifier model. If the score
@@ -85,7 +85,7 @@ class Model():
         wakeword_model_names = []
         if wakeword_models == []:
             wakeword_models = pretrained_model_paths
-            wakeword_model_names = list(openwakeword.models.keys())
+            wakeword_model_names = list(openwakeword.MODELS.keys())
         elif len(wakeword_models) >= 1:
             for ndx, i in enumerate(wakeword_models):
                 if os.path.exists(i):

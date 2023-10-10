@@ -8,6 +8,7 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
   unit_tests_linux:
@@ -18,8 +19,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-      with:
-        lfs: true
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v3
       with:
@@ -42,8 +41,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-      with:
-        lfs: true
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v3
       with:

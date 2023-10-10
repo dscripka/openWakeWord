@@ -23,6 +23,8 @@ import time
 import logging
 import openwakeword
 from typing import Union, List, Callable, Deque
+import requests
+from tqdm import tqdm
 
 
 # Base class for computing audio features using Google's speech_embedding
@@ -524,6 +526,79 @@ def bulk_predict(
 
     # Consolidate results and return
     return {list(i.keys())[0]: list(i.values())[0] for i in results}
+
+
+# Function to download files from a URL with a progress bar
+def download_file(url, target_directory, file_size=None):
+    """A simpel function to download a file from a URL with a progress bar using only the requests library"""
+    local_filename = url.split('/')[-1]
+
+    with requests.get(url, stream=True) as r:
+        if file_size is not None:
+            progress_bar = tqdm(total=file_size, unit='iB', unit_scale=True, desc=f"{local_filename}")
+        else:
+            total_size = int(r.headers.get('content-length', 0))
+            progress_bar = tqdm(total=total_size, unit='iB', unit_scale=True, desc=f"{local_filename}")
+
+        with open(os.path.join(target_directory, local_filename), 'wb') as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                f.write(chunk)
+                progress_bar.update(len(chunk))
+
+    progress_bar.close()
+
+
+# Function to download models from GitHub release assets
+def download_models(
+        model_names: List[str] = [],
+        target_directory: str = os.path.join(pathlib.Path(__file__).parent.resolve(), "resources", "models")
+        ):
+    """
+    Download the specified models from the release assets in the openWakeWord GitHub repository.
+    Uses the official urls in the MODELS dictionary in openwakeword/__init__.py.
+
+    Args:
+        model_names (List[str]): The names of the models to download (e.g., hey_jarvis_v0.1). Both ONNX and
+                                 tflite models will be downloaded. If not provided (the default),
+                                 the latest versions of all models will be downloaded.
+        target_directory (str): The directory to save the models to. Defaults to the install location
+                                of openWakeWord (i.e., the `resources/models` directory).
+    Returns:
+        None
+    """
+    if not isinstance(model_names, list):
+        raise ValueError("The model_names argument must be a list of strings")
+
+    # Always download melspectrogram and embedding models, if they don't already exist
+    if not os.path.exists(target_directory):
+        os.makedirs(target_directory)
+    for feature_model in openwakeword.FEATURE_MODELS.values():
+        if not os.path.exists(os.path.join(target_directory, feature_model["download_url"].split("/")[-1])):
+            download_file(feature_model["download_url"], target_directory)
+            download_file(feature_model["download_url"].replace(".tflite", ".onnx"), target_directory)
+
+    # Always download VAD models, if they don't already exist
+    for vad_model in openwakeword.VAD_MODELS.values():
+        if not os.path.exists(os.path.join(target_directory, vad_model["download_url"].split("/")[-1])):
+            download_file(vad_model["download_url"], target_directory)
+
+    # Get all model urls
+    official_model_urls = [i["download_url"] for i in openwakeword.MODELS.values()]
+    official_model_names = [i["download_url"].split("/")[-1] for i in openwakeword.MODELS.values()]
+
+    if model_names != []:
+        for model_name in model_names:
+            url = [i for i, j in zip(official_model_urls, official_model_names) if model_name in j]
+            if url != []:
+                if not os.path.exists(os.path.join(target_directory, url[0].split("/")[-1])):
+                    download_file(url[0], target_directory)
+                    download_file(url[0].replace(".tflite", ".onnx"), target_directory)
+    else:
+        print(official_model_urls)
+        for official_model_url in official_model_urls:
+            if not os.path.exists(os.path.join(target_directory, official_model_url.split("/")[-1])):
+                download_file(official_model_url, target_directory)
+                download_file(official_model_url.replace(".tflite", ".onnx"), target_directory)
 
 
 # Handle deprecated arguments and naming (thanks to https://stackoverflow.com/a/74564394)
