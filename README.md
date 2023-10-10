@@ -41,7 +41,7 @@ Many thanks to [TeaPoly](https://github.com/TeaPoly/speexdsp-ns-python) for thei
 
 # Usage
 
-For quick local testing, clone this repository and use the included [example script](examples/detect_from_microphone.py) to try streaming detection from a local microphone.
+For quick local testing, clone this repository and use the included [example script](examples/detect_from_microphone.py) to try streaming detection from a local microphone. You can individually download pre-trained models from current and past [releases](https://github.com/dscripka/openWakeWord/releases/), or you can download them using Python (see below).
 
 Adding openWakeWord to your own Python code requires just a few lines:
 
