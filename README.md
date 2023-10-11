@@ -206,7 +206,11 @@ While the models are trained with background noise to increase robustness, in so
 
 # Training New Models
 
-Recent versions of openWakeWord support an [automatic model training](openwakeword/train.py) utility that greatly simplifies the process of training custom models. See the example [notebook](notebooks/automatic_model_training.ipynb), or run it in [Google Colab](https://colab.research.google.com/drive/1yyFH-fpguX2BTAW8wSQxTrJnJTM-0QAd?usp=sharing) for an end-to-end example of how the process works.
+openWakeWord includes an automated utility that greatly simplifies the process of training custom models. This can be used in two ways:
+
+1) In a simple [Google Colab](https://colab.research.google.com/drive/1q1oe2zOyZp7UsB3jJiQ1IFn8z5YfjwEb?usp=sharing) notebook with an easy to use interface and simple end-to-end process. This allows anyone to produce a custom model very quickly (<1 hour) and doesn't require any development experience, but the performance of the model may be low in some deployment scenarios.
+
+2) A more detailed [notebook](notebooks/automatic_model_training.ipynb) (also on [Google Colab](https://colab.research.google.com/drive/1yyFH-fpguX2BTAW8wSQxTrJnJTM-0QAd?usp=sharing)) that describes the training process in more details, and enables more customization. This can produce high quality models, but requires more development experience.
 
 For users interested in understanding the fundamental concepts behind model training there is a more detailed, educational [tutorial notebook](notebooks/training_models.ipynb) also available. However, this specific notebook is not intended for training production models, and the automated process above is recommended for that purpose.
 
