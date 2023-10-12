@@ -925,6 +925,8 @@ def generate_adversarial_texts(input_text: str, N: int, include_partial_phrase: 
     # Download phonemizer model for OOV words, if needed
     if [] in input_text_phones:
         phonemizer_mdl_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "en_us_cmudict_forward.pt")
+        if not os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources")):
+            os.mkdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources"))
         if not os.path.exists(phonemizer_mdl_path):
             logging.warning("Downloading phonemizer model from DeepPhonemizer library...")
             import requests
