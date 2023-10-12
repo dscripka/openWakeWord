@@ -21,10 +21,11 @@ from multiprocessing.pool import ThreadPool
 from multiprocessing import Process, Queue
 import time
 import logging
+from tqdm import tqdm
 import openwakeword
+from numpy.lib.format import open_memmap
 from typing import Union, List, Callable, Deque
 import requests
-from tqdm import tqdm
 
 
 # Base class for computing audio features using Google's speech_embedding
@@ -528,9 +529,71 @@ def bulk_predict(
     return {list(i.keys())[0]: list(i.values())[0] for i in results}
 
 
+def compute_features_from_generator(generator, n_total, clip_duration, output_file, device="cpu", ncpu=1):
+    """
+    Computes audio features from a generator that produces Numpy arrays of shape (batch_size, samples)
+    containing 16-bit PCM audio data.
+
+    Args:
+        generator (Generator): The generator that process the arrays of audio data
+        n_total (int): The total number of rows (audio clips) that the generator will produce.
+                       Ideally this is precise, but it can be approximate as well as the output
+                       .npy file will be automatically trimmed to remove empty values.
+        clip_duration (float): The duration (in samples) of the audio produced by the generator
+        output_file (str): The output file (.npy) containing the audio features. Note that this file
+                           will be written to using memmap arrays, so it can be substantially larger
+                           than the available system memory.
+        device (str): The device ("cpu" or "gpu") to use for computing features.
+        ncpu (int): The number of cores to use when process the audio features (if computing on CPU)
+
+    Returns:
+        None
+    """
+    # Function specific imports
+    from openwakeword.data import trim_mmap
+
+    # Create audio features object
+    F = AudioFeatures(device=device)
+
+    # Determine the output shape and create output file
+    n_feature_cols = F.get_embedding_shape(clip_duration/16000)
+    output_shape = (n_total, n_feature_cols[0], n_feature_cols[1])
+    fp = open_memmap(output_file, mode='w+', dtype=np.float32, shape=output_shape)
+
+    # Get batch size by pulling one value from the generator and store features
+    row_counter = 0
+    audio_data = next(generator)
+    batch_size = audio_data.shape[0]
+
+    if batch_size > n_total:
+        raise ValueError(f"The value of 'n_total' ({n_total}) is less than the batch size ({batch_size})."
+                         " Please increase 'n_total' to be >= batch size.")
+
+    features = F.embed_clips(audio_data, batch_size=batch_size)
+    fp[row_counter:row_counter+features.shape[0], :, :] = features
+    row_counter += features.shape[0]
+    fp.flush()
+
+    # Compute features and add data to output file
+    for audio_data in tqdm(generator, total=n_total//batch_size, desc="Computing features"):
+        if row_counter >= n_total:
+            break
+
+        features = F.embed_clips(audio_data, batch_size=batch_size, ncpu=ncpu)
+        if row_counter + features.shape[0] > n_total:
+            features = features[0:n_total-row_counter]
+
+        fp[row_counter:row_counter+features.shape[0], :, :] = features
+        row_counter += features.shape[0]
+        fp.flush()
+
+    # Trip empty rows from the mmapped array
+    trim_mmap(output_file)
+
+
 # Function to download files from a URL with a progress bar
 def download_file(url, target_directory, file_size=None):
-    """A simpel function to download a file from a URL with a progress bar using only the requests library"""
+    """A simple function to download a file from a URL with a progress bar using only the requests library"""
     local_filename = url.split('/')[-1]
 
     with requests.get(url, stream=True) as r:

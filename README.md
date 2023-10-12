@@ -210,7 +210,13 @@ While the models are trained with background noise to increase robustness, in so
 
 # Training New Models
 
-Training new models is conceptually simple, and the entire process is demonstrated in a [tutorial notebook](notebooks/training_models.ipynb).
+openWakeWord includes an automated utility that greatly simplifies the process of training custom models. This can be used in two ways:
+
+1) In a simple [Google Colab](https://colab.research.google.com/drive/1q1oe2zOyZp7UsB3jJiQ1IFn8z5YfjwEb?usp=sharing) notebook with an easy to use interface and simple end-to-end process. This allows anyone to produce a custom model very quickly (<1 hour) and doesn't require any development experience, but the performance of the model may be low in some deployment scenarios.
+
+2) A more detailed [notebook](notebooks/automatic_model_training.ipynb) (also on [Google Colab](https://colab.research.google.com/drive/1yyFH-fpguX2BTAW8wSQxTrJnJTM-0QAd?usp=sharing)) that describes the training process in more details, and enables more customization. This can produce high quality models, but requires more development experience.
+
+For users interested in understanding the fundamental concepts behind model training there is a more detailed, educational [tutorial notebook](notebooks/training_models.ipynb) also available. However, this specific notebook is not intended for training production models, and the automated process above is recommended for that purpose.
 
 Fundamentally, a new model requires two data generation and collection steps:
 
@@ -233,13 +239,23 @@ Future release road maps may have non-english support. In particular, [Mycroft.A
 - While the ONNX runtime [does support javascript](https://onnxruntime.ai/docs/get-started/with-javascript.html), much of the other functionality required for openWakeWord models would need to be ported. This is not currently on the roadmap, but please open an issue/start a discussion if this feature is of particular interest.
 
 **Is there a C++ version of openWakeWord?**
-- While the ONNX runtime [also has a C++ API](https://onnxruntime.ai/docs/get-started/with-cpp.html), there isn't an official C++ implementation of the full openWakeWord library. However, [@synesthesiam](https://github.com/synesthesiam) has created a [C++ version](https://github.com/rhasspy/openWakeWord-cpp) of openWakeWord with the essential functionality implemented.
+- While the ONNX runtime [also has a C++ API](https://onnxruntime.ai/docs/get-started/with-cpp.html), there isn't an official C++ implementation of the full openWakeWord library. However, [@synesthesiam](https://github.com/synesthesiam) has created a [C++ version](https://github.com/rhasspy/openWakeWord-cpp) of openWakeWord with basic functionality implemented.
 
 **Why are there three separate models instead of just one?**
 - Separating the models was an intentional choice to provide flexibility and optimize the efficiency of the end-to-end prediction process. For example, with separate melspectrogram, embedding, and prediction models, each one can operate on different size inputs of audio to optimize overall latency and share computations between models. It certainly is possible to make a combined model with all of the steps integrated, though, if that was a requirement of a particular use case.
 
 **I still get a large number of false activations when I use the pre-trained models, how can I reduce these?**
 - First, review the [recommendations for usage](#recommendations-for-usage) and ensure that these options do not improve overall system accuracy. Second, experiment with [custom verifier models](#user-specific-models), if possible. If neither of these approaches are helping, please open an issue with details of the deployment environment and the types of false activations that you are experiencing. We certainly appreciate feedback & requests on how to improve the base pre-trained models!
+
+# Acknowledgements
+
+I am very grateful for the encouraging and positive response from the open-source community since the release of openWakeWord in January 2023. In particular, I want to acknowledge and thank the following individuals and groups for their feedback, collaboration, and development support:
+
+- [synesthesiam](https://github.com/synesthesiam)
+- [SecretSauceAI](https://github.com/secretsauceai)
+- [OpenVoiceOS](https://github.com/OpenVoiceOS)
+- [Nabu Casa](https://github.com/NabuCasa)
+- [Home Assistant](https://github.com/home-assistant)
 
 # License
 

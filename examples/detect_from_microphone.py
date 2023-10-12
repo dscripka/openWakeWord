@@ -22,10 +22,10 @@ import argparse
 parser=argparse.ArgumentParser()
 parser.add_argument(
     "--chunk_size",
-    help="How much audio (in samples) to predict on at once",
+    help="How much audio (in number of samples) to predict on at once",
     type=int,
     default=1280,
-    required=True
+    required=False
 )
 parser.add_argument(
     "--model_path",
