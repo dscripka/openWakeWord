@@ -1,2 +1,0 @@
-recursive-include openwakeword *.onnx
-recursive-include openwakeword *.tflite

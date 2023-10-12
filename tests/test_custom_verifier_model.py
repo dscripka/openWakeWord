@@ -34,6 +34,9 @@ import scipy.io.wavfile
 import tempfile
 import pytest
 
+# Download models needed for tests
+openwakeword.utils.download_models(model_names=["alexa_v0.1", "hey_mycroft_v0.1"])
+
 
 # Tests
 class TestModels:
