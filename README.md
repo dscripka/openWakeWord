@@ -243,6 +243,16 @@ Future release road maps may have non-english support. In particular, [Mycroft.A
 **I still get a large number of false activations when I use the pre-trained models, how can I reduce these?**
 - First, review the [recommendations for usage](#recommendations-for-usage) and ensure that these options do not improve overall system accuracy. Second, experiment with [custom verifier models](#user-specific-models), if possible. If neither of these approaches are helping, please open an issue with details of the deployment environment and the types of false activations that you are experiencing. We certainly appreciate feedback & requests on how to improve the base pre-trained models!
 
+# Acknowledgements
+
+I am very grateful for the encouraging and positive response from the open-source community since the release of openWakeWord in January 2023. In particular, I want to acknowledge and thank the following individuals and groups for their feedback, collaboration, and development support:
+
+- [synesthesiam](https://github.com/synesthesiam)
+- [SecretSauceAI](https://github.com/secretsauceai)
+- [OpenVoiceOS](https://github.com/OpenVoiceOS)
+- [Nabu Casa](https://github.com/NabuCasa)
+- [Home Assistant](https://github.com/home-assistant)
+
 # License
 
 All of the code in this repository is licensed under the **Apache 2.0** license. All of the included pre-trained models are licensed under the [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-nc-sa/4.0/) license due to the inclusion of datasets with unknown or restrictive licensing as part of the training data. If you are interested in pre-trained models with more permissive licensing, please raise an issue and we will try to add them to a future release.
