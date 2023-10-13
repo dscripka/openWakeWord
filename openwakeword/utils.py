@@ -657,7 +657,6 @@ def download_models(
                     download_file(url[0], target_directory)
                     download_file(url[0].replace(".tflite", ".onnx"), target_directory)
     else:
-        print(official_model_urls)
         for official_model_url in official_model_urls:
             if not os.path.exists(os.path.join(target_directory, official_model_url.split("/")[-1])):
                 download_file(official_model_url, target_directory)
