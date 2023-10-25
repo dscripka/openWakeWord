@@ -50,7 +50,7 @@ setuptools.setup(
                 ],
         'full': [
                     'mutagen>=1.46.0,<2',
-                    'torch>=1.13.1,<2',
+                    'torch>=1.13.1,<3',
                     'torchaudio>=0.13.1,<1',
                     'torchinfo>=1.8.0,<2',
                     'torchmetrics>=0.11.4,<1',
@@ -64,7 +64,7 @@ setuptools.setup(
                     'pytest-mypy>=0.10.0,<1',
                     'acoustics>=0.2.6,<1',
                     'pyyaml>=6.0,<7',
-                    'tensorflow==2.8.1',
+                    'tensorflow-cpu==2.8.1',
                     'tensorflow_probability==0.16.0',
                     'protobuf>=3.20,<4',
                     'onnx_tf==1.10.0',
