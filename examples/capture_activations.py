@@ -68,10 +68,26 @@ parser.add_argument(
     default=False,
     required=False
 )
+parser=argparse.ArgumentParser()
 parser.add_argument(
-    "--model",
-    help="The model to use for openWakeWord, leave blank to use all available models",
+    "--chunk_size",
+    help="How much audio (in number of 16khz samples) to predict on at once",
+    type=int,
+    default=1280,
+    required=False
+)
+parser.add_argument(
+    "--model_path",
+    help="The path of a specific model to load",
     type=str,
+    default="",
+    required=False
+)
+parser.add_argument(
+    "--inference_framework",
+    help="The inference framework to use (either 'onnx' or 'tflite'",
+    type=str,
+    default='tflite',
     required=False
 )
 parser.add_argument(
@@ -87,25 +103,26 @@ args=parser.parse_args()
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
 RATE = 16000
-CHUNK = 1280
+CHUNK = args.chunk_size
 audio = pyaudio.PyAudio()
 mic_stream = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
 
 # Load pre-trained openwakeword models
-if args.model:
+if args.model_path:
     model_paths = openwakeword.get_pretrained_model_paths()
     for path in model_paths:
-        if args.model in path:
+        if args.model_path in path:
             model_path = path
             
     if model_path:
         owwModel = Model(
-            wakeword_model_paths=[model_path],
+            wakeword_models=[model_path],
             enable_speex_noise_suppression=args.noise_suppression,
-            vad_threshold = args.vad_threshold
-            )
+            vad_threshold = args.vad_threshold,
+            inference_framework=args.inference_framework
+        )
     else: 
-        print(f'Could not find model \"{args.model}\"')
+        print(f'Could not find model \"{args.model_path}\"')
         exit()
 else:
     owwModel = Model(
