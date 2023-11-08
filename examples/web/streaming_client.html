@@ -1,0 +1,112 @@
+<html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Websocket Microphone Streaming</title>
+</head>
+<body>
+  <h1>Streaming Audio to openWakeWord Using Websockets</h1>
+  <button id="startButton">Start Recording</button>
+
+  <script>
+  // Create websocket connection
+  ws = new WebSocket('ws://localhost:9000/ws');
+
+  // When the websocket connection is open
+  ws.onopen = function() {
+    console.log('WebSocket connection is open');
+  };
+
+  // Get responses from websocket
+  ws.onmessage = (event) => {
+    console.log(event.data);
+  };
+
+  // Create microphone capture stream
+  // Based on the excellent guide here: https://medium.com/@ragymorkos/gettineg-monochannel-16-bit-signed-integer-pcm-audio-samples-from-the-microphone-in-the-browser-8d4abf81164d
+  navigator.getUserMedia = navigator.getUserMedia || 
+                         navigator.webkitGetUserMedia || 
+                         navigator.mozGetUserMedia || 
+                         navigator.msGetUserMedia;
+ 
+  let audioStream;
+  let audioContext;
+  let recorder;
+  let volume;
+  let sampleRate
+
+  if (navigator.getUserMedia)
+  {
+    navigator.getUserMedia({audio: true}, function(stream){
+        audioStream = stream;
+
+        // creates the an instance of audioContext
+        const context = window.AudioContext || window.webkitAudioContext;
+        audioContext = new context();
+        
+        // retrieve the current sample rate of microphone the browser is using and send to Python server
+        sampleRate = audioContext.sampleRate;
+        
+        // creates a gain node
+        volume = audioContext.createGain();
+        
+        // creates an audio node from the microphone incoming stream
+        const audioInput = audioContext.createMediaStreamSource(audioStream);
+        
+        // connect the stream to the gain node
+        audioInput.connect(volume);
+        
+        /* From the spec: This value controls how frequently the audioprocess event is
+        dispatched and how many sample-frames need to be processed each call.
+        Lower values for buffer size will result in a lower (better) latency.
+        Higher values will be necessary to avoid audio breakup and glitches */
+        const bufferSize = 4096;
+        recorder = (audioContext.createScriptProcessor || 
+                    audioContext.createJavaScriptNode).call(audioContext, 
+                                                            bufferSize, 
+                                                            1, 
+                                                            1);
+
+                                                            const leftChannel = [];
+        
+        recorder.onaudioprocess = function(event){
+          const samples = event.inputBuffer.getChannelData(0);
+          const PCM16iSamples = [];
+
+          for (let i = 0; i < samples.length; i++)
+          {
+            let val = Math.floor(32767 * samples[i]);
+            val = Math.min(32767, val);
+            val = Math.max(-32768, val);
+          
+            PCM16iSamples.push(val);
+          }
+
+          // Push audio to websocket
+          const int16Array = new Int16Array(PCM16iSamples);
+          const blob = new Blob([int16Array], { type: 'application/octet-stream' })
+          ws.send(blob);
+
+        };
+
+    }, function(error){
+        alert('Error capturing audio.');
+    });
+  }
+  else
+  {
+    alert('getUserMedia not supported in this browser.');
+  }
+
+  // start recording
+  startButton.addEventListener('click', function() {
+    volume.connect(recorder);
+    recorder.connect(audioContext.destination);
+    ws.send(sampleRate);
+  })
+
+  </script>
+</body>
+</html>
