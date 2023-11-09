@@ -26,11 +26,15 @@ import numpy as np
 from openwakeword import Model
 import resampy
 import argparse
+import json
 
 # Define websocket handler
 async def websocket_handler(request):
     ws = web.WebSocketResponse()
     await ws.prepare(request)
+
+    # Send loaded models
+    await ws.send_str(json.dumps({"loaded_models": list(owwModel.models.keys())}))
 
     # Start listening for websocket messages
     async for msg in ws:
@@ -61,7 +65,7 @@ async def websocket_handler(request):
                     activations.append(key)
 
             if activations != []:
-                await ws.send_str(str(activations))
+                await ws.send_str(json.dumps({"activations": activations}))
 
     return ws
 
