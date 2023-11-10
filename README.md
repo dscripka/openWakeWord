@@ -11,6 +11,9 @@ openWakeWord is an open-source wakeword library that can be used to create voice
 
 # Updates
 
+**2023/11/09**
+- Added example scripts under `examples/web` that demonstrate streaming audio from a web application into openWakeWord.
+
 **2023/10/11**
 - Significant improvements to the process of [training new models](#training-new-models), including an example Google Colab notebook demonstrating how to train a basic wake word model in <1 hour.
 
@@ -240,9 +243,11 @@ Future release road maps may have non-english support. In particular, [Mycroft.A
 
 **Can openWakeWord be run in a browser with javascript?**
 - While the ONNX runtime [does support javascript](https://onnxruntime.ai/docs/get-started/with-javascript.html), much of the other functionality required for openWakeWord models would need to be ported. This is not currently on the roadmap, but please open an issue/start a discussion if this feature is of particular interest.
+- As a potential work-around for some applications, the example scripts in `examples/web` demonstrate how audio can be captured in a browser and streaming via websockets into openWakeWord running in a Python backend server.
+- Other potential options could include projects like `pyodide` (see [here](https://github.com/pyodide/pyodide/issues/4220)) for a related issue.
 
 **Is there a C++ version of openWakeWord?**
-- While the ONNX runtime [also has a C++ API](https://onnxruntime.ai/docs/get-started/with-cpp.html), there isn't an official C++ implementation of the full openWakeWord library. However, [@synesthesiam](https://github.com/synesthesiam) has created a [C++ version](https://github.com/rhasspy/openWakeWord-cpp) of openWakeWord with basic functionality implemented.
+- While the ONNX runtime [also has a C++ API](https://onnxruntime.ai/docs/get-started/with-cpp.html), there isn't an official C++ implementation of the full openWakeWord library. However, [@synesthesiam](https://github.com/synesthesiam) has created a [C++ version of openWakeWord](https://github.com/rhasspy/openWakeWord-cpp) with basic functionality implemented.
 
 **Why are there three separate models instead of just one?**
 - Separating the models was an intentional choice to provide flexibility and optimize the efficiency of the end-to-end prediction process. For example, with separate melspectrogram, embedding, and prediction models, each one can operate on different size inputs of audio to optimize overall latency and share computations between models. It certainly is possible to make a combined model with all of the steps integrated, though, if that was a requirement of a particular use case.
