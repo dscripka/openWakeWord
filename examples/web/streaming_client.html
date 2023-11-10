@@ -121,7 +121,8 @@
     }
   };
 
-  // Create microphone capture stream
+  // Create microphone capture stream for 16-bit PCM audio data
+  // Code based on the excellent tutorial by Ragy Morkas: https://medium.com/@ragymorkos/gettineg-monochannel-16-bit-signed-integer-pcm-audio-samples-from-the-microphone-in-the-browser-8d4abf81164d
   navigator.getUserMedia = navigator.getUserMedia || 
                          navigator.webkitGetUserMedia || 
                          navigator.mozGetUserMedia || 
