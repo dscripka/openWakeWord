@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Websocket Microphone Streaming</title>
+  <style>
+    body {
+      text-align: center;
+      font-family: 'Roboto', sans-serif;
+    }
+    #startButton {
+      padding: 15px 30px;
+      font-size: 18px;
+      background-color: #03A9F4;
+      border: none;
+      border-radius: 4px;
+      color: white;
+      cursor: pointer;
+      outline: none;
+      transition: background-color 0.3s;
+    }
+    #startButton.listening {
+      background-color: #4CAF50;
+    }
+    table {
+      margin: 20px auto;
+      border-collapse: collapse;
+      width: 60%;
+    }
+    th, td {
+      border: 1px solid #E0E0E0;
+      padding: 10px;
+      text-align: left;
+    }
+    th {
+      background-color: #F5F5F5;
+    }
+
+    @keyframes fadeOut {
+      from {
+        opacity: 1;
+      }
+      to {
+        opacity: 0;
+      }
+    }
+
+    .detected-animation {
+      animation: fadeOut 2s forwards;
+    }
+  </style>
+</head>
+<body>
+  <h1>Streaming Audio to openWakeWord Using Websockets</h1>
+  <button id="startButton">Start Listening</button>
+
+  <table>
+    <tr>
+      <th>Wakeword</th>
+      <th>Detected</th>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+    </tr>
+  </table>
+
+  <script>
+  // Create websocket connection
+  const ws = new WebSocket('ws://localhost:9000/ws');
+
+  // When the websocket connection is open
+  ws.onopen = function() {
+    console.log('WebSocket connection is open');
+  };
+
+  // Get responses from websocket and display information
+  ws.onmessage = (event) => {
+    console.log(event.data);
+    const model_payload = JSON.parse(event.data);
+    if ("loaded_models" in model_payload) {
+      // Add loaded models to the rows of the first column in the table, inserting rows as needed
+      const table = document.querySelector('table');
+      const rows = table.querySelectorAll('tr');
+      for (let i = 1; i < model_payload.loaded_models.length + 1; i++) {
+        if (i < rows.length) {
+          const row = rows[i];
+          const cell = row.querySelectorAll('td')[0];
+          cell.textContent = model_payload.loaded_models[i - 1];
+        } else {
+          // Insert extra rows if needed, both column 1 and 2
+          const row = table.insertRow();
+          const cell1 = row.insertCell();
+          const cell2 = row.insertCell();
+          cell1.textContent = model_payload.loaded_models[i - 1];
+          cell2.textContent = '';
+        }
+      }
+
+    }
+
+    if ("activations" in model_payload) {
+      // Add detected wakeword to the rows of the second column in the table
+      const table = document.querySelector('table');
+      const rows = table.querySelectorAll('tr');
+      for (let i = 1; i < rows.length; i++) {
+        // Check for the model name in the first column and add "Detected!" to the second column if they match
+        if (model_payload.activations.includes(rows[i].querySelectorAll('td')[0].textContent)) {
+          const cell = rows[i].querySelectorAll('td')[1];
+          cell.textContent = "Detected!";
+          cell.classList.add('detected-animation'); // animate fade out
+      
+          // Remove the CSS class after the fade out animation ends to reset the state
+          cell.addEventListener('animationend', () => {
+            cell.textContent = '';
+            cell.classList.remove('detected-animation');
+          }, { once: true });
+        }
+      }
+    }
+  };
+
+  // Create microphone capture stream for 16-bit PCM audio data
+  // Code based on the excellent tutorial by Ragy Morkas: https://medium.com/@ragymorkos/gettineg-monochannel-16-bit-signed-integer-pcm-audio-samples-from-the-microphone-in-the-browser-8d4abf81164d
+  navigator.getUserMedia = navigator.getUserMedia || 
+                         navigator.webkitGetUserMedia || 
+                         navigator.mozGetUserMedia || 
+                         navigator.msGetUserMedia;
+ 
+  let audioStream;
+  let audioContext;
+  let recorder;
+  let volume;
+  let sampleRate;
+
+  if (navigator.getUserMedia) {
+    navigator.getUserMedia({audio: true}, function(stream) {
+      audioStream = stream;
+
+      // creates the an instance of audioContext
+      const context = window.AudioContext || window.webkitAudioContext;
+      audioContext = new context();
+      
+      // retrieve the current sample rate of microphone the browser is using and send to Python server
+      sampleRate = audioContext.sampleRate;
+      
+      // creates a gain node
+      volume = audioContext.createGain();
+      
+      // creates an audio node from the microphone incoming stream
+      const audioInput = audioContext.createMediaStreamSource(audioStream);
+      
+      // connect the stream to the gain node
+      audioInput.connect(volume);
+      
+      const bufferSize = 4096;
+      recorder = (audioContext.createScriptProcessor || 
+                  audioContext.createJavaScriptNode).call(audioContext, 
+                                                          bufferSize, 
+                                                          1, 
+                                                          1);
+
+      recorder.onaudioprocess = function(event) {
+        const samples = event.inputBuffer.getChannelData(0);
+        const PCM16iSamples = samples.map(sample => {
+          let val = Math.floor(32767 * sample);
+          return Math.min(32767, Math.max(-32768, val));
+        });
+
+        // Push audio to websocket
+        const int16Array = new Int16Array(PCM16iSamples);
+        const blob = new Blob([int16Array], { type: 'application/octet-stream' });
+        ws.send(blob);
+      };
+
+    }, function(error) {
+      alert('Error capturing audio.');
+    });
+  } else {
+    alert('getUserMedia not supported in this browser.');
+  }
+
+  // start recording
+  const startButton = document.getElementById('startButton');
+  startButton.addEventListener('click', function() {
+    if (!startButton.classList.contains('listening')) {
+      volume.connect(recorder);
+      recorder.connect(audioContext.destination);
+      ws.send(sampleRate);
+      startButton.classList.add('listening');
+      startButton.textContent = 'Listening...';
+    }
+  });
+  </script>
+</body>
+</html>
