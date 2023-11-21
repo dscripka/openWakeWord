@@ -225,7 +225,7 @@ class Model(nn.Module):
     def _select_best_model(self, false_positive_validate_data, val_set_hrs=11.3, max_fp_per_hour=0.5, min_recall=0.20):
         """
         Select the top model based on the false positive rate on the validation data
-        
+
         Args:
             false_positive_validate_data (torch.DataLoader): A dataloader with validation data
             n (int): The number of models to select
@@ -237,7 +237,8 @@ class Model(nn.Module):
         false_positive_rates = [0]*len(self.best_models)
         for batch in false_positive_validate_data:
             x_val, y_val = batch[0].to(self.device), batch[1].to(self.device)
-            for mdl_ndx, model in tqdm(enumerate(self.best_models), total=len(self.best_models), desc="Find best checkpoints by false positive rate"):
+            for mdl_ndx, model in tqdm(enumerate(self.best_models), total=len(self.best_models),
+                                       desc="Find best checkpoints by false positive rate"):
                 with torch.no_grad():
                     val_ps = model(x_val)
                     false_positive_rates[mdl_ndx] = false_positive_rates[mdl_ndx] + self.fp(val_ps, y_val[..., None]).detach().cpu().numpy()
@@ -251,7 +252,9 @@ class Model(nn.Module):
         else:
             best_model = self.best_models[candidate_model_ndx[np.argmax(candidate_model_recall)]]
             best_model_training_step = self.best_model_scores[candidate_model_ndx[np.argmax(candidate_model_recall)]]["training_step_ndx"]
-            print(f"Best model from training step {best_model_training_step} out of {len(candidate_model_ndx)} models has recall of {np.max(candidate_model_recall)} and false positive rate of {false_positive_rates[candidate_model_ndx[np.argmax(candidate_model_recall)]]}")
+            logging.info(f"Best model from training step {best_model_training_step} out of {len(candidate_model_ndx)}"
+                         f"models has recall of {np.max(candidate_model_recall)} and false positive rate of"
+                         f" {false_positive_rates[candidate_model_ndx[np.argmax(candidate_model_recall)]]}")
 
         return best_model
 
@@ -423,7 +426,8 @@ class Model(nn.Module):
         # Save ONNX model
         logging.info(f"####\nSaving ONNX mode as '{os.path.join(output_dir, model_name + '.onnx')}'")
         model_to_save = copy.deepcopy(model)
-        torch.onnx.export(model_to_save.to("cpu"), torch.rand(self.input_shape)[None, ], os.path.join(output_dir, model_name + ".onnx"), opset_version=13)
+        torch.onnx.export(model_to_save.to("cpu"), torch.rand(self.input_shape)[None, ],
+                          os.path.join(output_dir, model_name + ".onnx"), opset_version=13)
 
         return None
 
@@ -695,7 +699,7 @@ if __name__ == '__main__':
             for target_phrase in config["target_phrase"]:
                 adversarial_texts.extend(generate_adversarial_texts(
                     input_text=target_phrase,
-                    N=config["n_samples"],
+                    N=config["n_samples"]//len(config["target_phrase"]),
                     include_partial_phrase=1.0,
                     include_input_words=0.2))
             generate_samples(text=adversarial_texts, max_samples=config["n_samples"]-n_current_samples,
@@ -718,7 +722,7 @@ if __name__ == '__main__':
             for target_phrase in config["target_phrase"]:
                 adversarial_texts.extend(generate_adversarial_texts(
                     input_text=target_phrase,
-                    N=config["n_samples_val"],
+                    N=config["n_samples_val"]//len(config["target_phrase"]),
                     include_partial_phrase=1.0,
                     include_input_words=0.2))
             generate_samples(text=adversarial_texts, max_samples=config["n_samples_val"]-n_current_samples,
