@@ -560,8 +560,8 @@ class Model(nn.Module):
                     logging.info("Saving checkpoint with metrics >= to targets!")
                     self.best_models.append(copy.deepcopy(self.model))
                     self.best_model_scores.append({"training_step_ndx": step_ndx, "val_n_fp": self.history["val_n_fp"][-1],
-                                                   "val_recall": self.history["val_recall"][-1]},
-                                                   "val_accuracy": self.history["val_accuracy"][-1])
+                                                   "val_recall": self.history["val_recall"][-1],
+                                                   "val_accuracy": self.history["val_accuracy"][-1]})
                     self.best_val_recall = self.history["val_recall"][-1]
                     self.best_val_accuracy = self.history["val_accuracy"][-1]
 
