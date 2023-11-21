@@ -18,12 +18,13 @@ from pathlib import Path
 import openwakeword
 from openwakeword.data import generate_adversarial_texts, augment_clips, mmap_batch_generator
 from openwakeword.utils import compute_features_from_generator
+from openwakeword.utils import AudioFeatures
 
 
 # Base model class for an openwakeword model
 class Model(nn.Module):
     def __init__(self, n_classes=1, input_shape=(16, 96), model_type="dnn",
-                 layer_dim=128, seconds_per_example=None):
+                 layer_dim=128, n_blocks=1, seconds_per_example=None):
         super().__init__()
 
         # Store inputs as attributes
@@ -40,17 +41,46 @@ class Model(nn.Module):
 
         # Define model (currently on fully-connected network supported)
         if model_type == "dnn":
-            self.model = nn.Sequential(
-                nn.Flatten(),
-                nn.Linear(input_shape[0]*input_shape[1], layer_dim),
-                nn.LayerNorm(layer_dim),
-                nn.ReLU(),
-                nn.Linear(layer_dim, layer_dim),
-                nn.LayerNorm(layer_dim),
-                nn.ReLU(),
-                nn.Linear(layer_dim, n_classes),
-                nn.Sigmoid() if n_classes == 1 else nn.ReLU(),
-            )
+            # self.model = nn.Sequential(
+            #     nn.Flatten(),
+            #     nn.Linear(input_shape[0]*input_shape[1], layer_dim),
+            #     nn.LayerNorm(layer_dim),
+            #     nn.ReLU(),
+            #     nn.Linear(layer_dim, layer_dim),
+            #     nn.LayerNorm(layer_dim),
+            #     nn.ReLU(),
+            #     nn.Linear(layer_dim, n_classes),
+            #     nn.Sigmoid() if n_classes == 1 else nn.ReLU(),
+            # )
+
+            class FCNBlock(nn.Module):
+                def __init__(self, layer_dim):
+                    super().__init__()
+                    self.fcn_layer = nn.Linear(layer_dim, layer_dim)
+                    self.relu = nn.ReLU()
+                    self.layer_norm = nn.LayerNorm(layer_dim)
+
+                def forward(self, x):
+                    return self.relu(self.layer_norm(self.fcn_layer(x)))
+
+            class Net(nn.Module):
+                def __init__(self, input_shape, layer_dim, n_blocks=1, n_classes=1):
+                    super().__init__()
+                    self.flatten = nn.Flatten()
+                    self.layer1 = nn.Linear(input_shape[0]*input_shape[1], layer_dim)
+                    self.relu1 = nn.ReLU()
+                    self.layernorm1 = nn.LayerNorm(layer_dim)
+                    self.blocks = nn.ModuleList([FCNBlock(layer_dim) for i in range(n_blocks)])
+                    self.last_layer = nn.Linear(layer_dim, n_classes)
+                    self.last_act = nn.Sigmoid() if n_classes == 1 else nn.ReLU()
+
+                def forward(self, x):
+                    x = self.relu1(self.layernorm1(self.layer1(self.flatten(x))))
+                    for block in self.blocks:
+                        x = block(x)
+                    x = self.last_act(self.last_layer(x))
+                    return x
+            self.model = Net(input_shape, layer_dim, n_blocks=n_blocks, n_classes=n_classes)
         elif model_type == "rnn":
             class Net(nn.Module):
                 def __init__(self, input_shape, n_classes=1):
@@ -163,7 +193,7 @@ class Model(nn.Module):
         return self.model(x)
 
     def summary(self):
-        return torchinfo.summary(self.model, input_size=(1,) + self.input_shape)
+        return torchinfo.summary(self.model, input_size=(1,) + self.input_shape, device='cpu')
 
     def average_models(self, models=None):
         """Averages the weights of the provided models together to make a new model"""
@@ -191,6 +221,42 @@ class Model(nn.Module):
         averaged_model.load_state_dict(averaged_model_dict)
 
         return averaged_model
+
+    def _select_best_model(self, false_positive_validate_data, val_set_hrs=11.3, max_fp_per_hour=0.5, min_recall=0.20):
+        """
+        Select the top model based on the false positive rate on the validation data
+
+        Args:
+            false_positive_validate_data (torch.DataLoader): A dataloader with validation data
+            n (int): The number of models to select
+
+        Returns:
+            list: A list of the top n models
+        """
+        # Get false positive rates for each model
+        false_positive_rates = [0]*len(self.best_models)
+        for batch in false_positive_validate_data:
+            x_val, y_val = batch[0].to(self.device), batch[1].to(self.device)
+            for mdl_ndx, model in tqdm(enumerate(self.best_models), total=len(self.best_models),
+                                       desc="Find best checkpoints by false positive rate"):
+                with torch.no_grad():
+                    val_ps = model(x_val)
+                    false_positive_rates[mdl_ndx] = false_positive_rates[mdl_ndx] + self.fp(val_ps, y_val[..., None]).detach().cpu().numpy()
+        false_positive_rates = [fp/val_set_hrs for fp in false_positive_rates]
+
+        candidate_model_ndx = [ndx for ndx, fp in enumerate(false_positive_rates) if fp <= max_fp_per_hour]
+        candidate_model_recall = [self.best_model_scores[ndx]["val_recall"] for ndx in candidate_model_ndx]
+        if max(candidate_model_recall) <= min_recall:
+            logging.warning(f"No models with recall >= {min_recall} found!")
+            return None
+        else:
+            best_model = self.best_models[candidate_model_ndx[np.argmax(candidate_model_recall)]]
+            best_model_training_step = self.best_model_scores[candidate_model_ndx[np.argmax(candidate_model_recall)]]["training_step_ndx"]
+            logging.info(f"Best model from training step {best_model_training_step} out of {len(candidate_model_ndx)}"
+                         f"models has recall of {np.max(candidate_model_recall)} and false positive rate of"
+                         f" {false_positive_rates[candidate_model_ndx[np.argmax(candidate_model_recall)]]}")
+
+        return best_model
 
     def auto_train(self, X_train, X_val, false_positive_val_data, steps=50000, max_negative_weight=1000,
                    target_fp_per_hour=0.2):
@@ -299,6 +365,57 @@ class Model(nn.Module):
 
         return combined_model
 
+    def predict_on_features(self, features, model=None):
+        """
+        Predict on Tensors of openWakeWord features corresponding to single audio clips
+
+        Args:
+            features (torch.Tensor): A Tensor of openWakeWord features with shape (batch, features)
+            model (torch.nn.Module): A Pytorch model to use for prediction (default None, which will use self.model)
+
+        Returns:
+            torch.Tensor: An array of predictions of shape (batch, prediction), where 0 is negative and 1 is positive
+        """
+        if len(features) < 3:
+            features = features[None, ]
+
+        features = features.to(self.device)
+        predictions = []
+        for x in tqdm(features, desc="Predicting on clips"):
+            x = x[None, ]
+            batch = []
+            for i in range(0, x.shape[1]-16, 1):  # step size of 1 (80 ms)
+                batch.append(x[:, i:i+16, :])
+            batch = torch.vstack(batch)
+            if model is None:
+                preds = self.model(batch)
+            else:
+                preds = model(batch)
+            predictions.append(preds.detach().cpu().numpy()[None, ])
+
+        return np.vstack(predictions)
+
+    def predict_on_clips(self, clips, model=None):
+        """
+        Predict on Tensors of 16-bit 16 khz audio data
+
+        Args:
+            clips (np.ndarray): A Numpy array of audio clips with shape (batch, samples)
+            model (torch.nn.Module): A Pytorch model to use for prediction (default None, which will use self.model)
+
+        Returns:
+            np.ndarray: An array of predictions of shape (batch, prediction), where 0 is negative and 1 is positive
+        """
+
+        # Get features from clips
+        F = AudioFeatures(device='cpu', ncpu=4)
+        features = F.embed_clips(clips, batch_size=16)
+
+        # Predict on features
+        preds = self.predict_on_features(torch.from_numpy(features), model=model)
+
+        return preds
+
     def export_model(self, model, model_name, output_dir):
         """Saves the trained openwakeword model to both onnx and tflite formats"""
 
@@ -315,7 +432,7 @@ class Model(nn.Module):
         return None
 
     def train_model(self, X, max_steps, warmup_steps, hold_steps, X_val=None,
-                    false_positive_val_data=None,
+                    false_positive_val_data=None, positive_test_clips=None,
                     negative_weight_schedule=[1],
                     val_steps=[250], lr=0.0001, val_set_hrs=1):
         # Move models and main class to target device
@@ -325,6 +442,8 @@ class Model(nn.Module):
         # Train model
         accumulation_steps = 1
         accumulated_samples = 0
+        accumulated_predictions = torch.Tensor([]).to(self.device)
+        accumulated_labels = torch.Tensor([]).to(self.device)
         for step_ndx, data in tqdm(enumerate(X, 0), total=max_steps, desc="Training"):
             # get the inputs; data is a list of [inputs, labels]
             x, y = data[0].to(self.device), data[1].to(self.device)
@@ -361,26 +480,34 @@ class Model(nn.Module):
                     w[pos_ndcs] = 1
                     w = w[..., None]
 
-            # Do backpropagation, with gradient accumulation if the batch-size after selecting high loss examples is too small
-            loss = self.loss(predictions, y_ if self.n_classes == 1 else y, w.to(self.device))
-            loss = loss/accumulation_steps
-            accumulated_samples += predictions.shape[0]
-            if accumulated_samples < 128:
-                accumulation_steps += 1
-            else:
-                loss.backward()
-                self.optimizer.step()
-                accumulation_steps = 1
-                accumulated_samples = 0
+            if predictions.shape[0] != 0:
+                # Do backpropagation, with gradient accumulation if the batch-size after selecting high loss examples is too small
+                loss = self.loss(predictions, y_ if self.n_classes == 1 else y, w.to(self.device))
+                loss = loss/accumulation_steps
+                accumulated_samples += predictions.shape[0]
 
-            # Compute training metrics and log them
-            fp = self.fp(predictions, y_ if self.n_classes == 1 else y)
-            self.n_fp += fp
+                if predictions.shape[0] >= 128:
+                    accumulated_predictions = predictions
+                    accumulated_labels = y_
+                if accumulated_samples < 128:
+                    accumulation_steps += 1
+                    accumulated_predictions = torch.cat((accumulated_predictions, predictions))
+                    accumulated_labels = torch.cat((accumulated_labels, y_))
+                else:
+                    loss.backward()
+                    self.optimizer.step()
+                    accumulation_steps = 1
+                    accumulated_samples = 0
 
-            self.history["loss"].append(loss.detach().cpu().numpy())
-            self.history["recall"].append(self.recall(predictions, y_).detach().cpu().numpy())
-            if self.n_classes != 1:
-                self.history["accuracy"].append(self.acc(predictions, y).detach().cpu().numpy())
+                    self.history["loss"].append(loss.detach().cpu().numpy())
+
+                    # Compute training metrics and log them
+                    fp = self.fp(accumulated_predictions, accumulated_labels if self.n_classes == 1 else y)
+                    self.n_fp += fp
+                    self.history["recall"].append(self.recall(accumulated_predictions, accumulated_labels).detach().cpu().numpy())
+
+                    accumulated_predictions = torch.Tensor([]).to(self.device)
+                    accumulated_labels = torch.Tensor([]).to(self.device)
 
             # Run validation and log validation metrics
             if step_ndx in val_steps and step_ndx > 1 and false_positive_val_data is not None:
@@ -394,27 +521,46 @@ class Model(nn.Module):
                 val_fp_per_hr = (val_fp/val_set_hrs).detach().cpu().numpy()
                 self.history["val_fp_per_hr"].append(val_fp_per_hr)
 
+            # Get recall on test clips
+            if step_ndx in val_steps and step_ndx > 1 and positive_test_clips is not None:
+                tp = 0
+                fn = 0
+                for val_step_ndx, data in enumerate(positive_test_clips):
+                    with torch.no_grad():
+                        x_val = data[0].to(self.device)
+                        batch = []
+                        for i in range(0, x_val.shape[1]-16, 1):
+                            batch.append(x_val[:, i:i+16, :])
+                        batch = torch.vstack(batch)
+                        preds = self.model(batch)
+                        if any(preds >= 0.5):
+                            tp += 1
+                        else:
+                            fn += 1
+                self.history["positive_test_clips_recall"].append(tp/(tp + fn))
+
             if step_ndx in val_steps and step_ndx > 1 and X_val is not None:
-                # Get accuracy for balanced test examples of positive and negative clips
+                # Get metrics for balanced test examples of positive and negative clips
                 for val_step_ndx, data in enumerate(X_val):
                     with torch.no_grad():
                         x_val, y_val = data[0].to(self.device), data[1].to(self.device)
                         val_predictions = self.model(x_val)
                         val_recall = self.recall(val_predictions, y_val[..., None]).detach().cpu().numpy()
                         val_acc = self.accuracy(val_predictions, y_val[..., None].to(torch.int64))
+                        val_fp = self.fp(val_predictions, y_val[..., None])
                 self.history["val_accuracy"].append(val_acc.detach().cpu().numpy())
                 self.history["val_recall"].append(val_recall)
+                self.history["val_n_fp"].append(val_fp.detach().cpu().numpy())
 
-                # Save models with a validation score above/below the 90th percentile
-                # of the validation scores up to that point
-                if val_fp_per_hr <= np.percentile(self.history["val_fp_per_hr"], 10) and \
-                        self.history["val_accuracy"][-1] >= np.percentile(self.history["val_accuracy"], 90) and \
-                        self.history["val_recall"][-1] >= np.percentile(self.history["val_recall"], 90):
-                    # logging.info("Saving checkpoint with metrics >= to targets!")
+            # Save models with a validation score above/below the 90th percentile
+            # of the validation scores up to that point
+            if step_ndx in val_steps and step_ndx > 1:
+                if self.history["val_n_fp"][-1] <= np.percentile(self.history["val_n_fp"], 50) and \
+                   self.history["val_recall"][-1] >= np.percentile(self.history["val_recall"], 5):
+                    logging.info("Saving checkpoint with metrics >= to targets!")
                     self.best_models.append(copy.deepcopy(self.model))
-                    self.best_model_scores.append({"val_fp_per_hr": val_fp_per_hr, "val_accuracy": self.history["val_accuracy"][-1],
+                    self.best_model_scores.append({"training_step_ndx": step_ndx, "val_n_fp": self.history["val_n_fp"][-1],
                                                    "val_recall": self.history["val_recall"][-1]})
-                    self.best_val_fp = val_fp_per_hr
                     self.best_val_recall = self.history["val_recall"][-1]
                     self.best_val_accuracy = self.history["val_accuracy"][-1]
 
@@ -553,7 +699,7 @@ if __name__ == '__main__':
             for target_phrase in config["target_phrase"]:
                 adversarial_texts.extend(generate_adversarial_texts(
                     input_text=target_phrase,
-                    N=config["n_samples"],
+                    N=config["n_samples"]//len(config["target_phrase"]),
                     include_partial_phrase=1.0,
                     include_input_words=0.2))
             generate_samples(text=adversarial_texts, max_samples=config["n_samples"]-n_current_samples,
@@ -576,7 +722,7 @@ if __name__ == '__main__':
             for target_phrase in config["target_phrase"]:
                 adversarial_texts.extend(generate_adversarial_texts(
                     input_text=target_phrase,
-                    N=config["n_samples_val"],
+                    N=config["n_samples_val"]//len(config["target_phrase"]),
                     include_partial_phrase=1.0,
                     include_input_words=0.2))
             generate_samples(text=adversarial_texts, max_samples=config["n_samples_val"]-n_current_samples,
