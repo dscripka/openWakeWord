@@ -557,10 +557,12 @@ class Model(nn.Module):
             if step_ndx in val_steps and step_ndx > 1:
                 if self.history["val_n_fp"][-1] <= np.percentile(self.history["val_n_fp"], 50) and \
                    self.history["val_recall"][-1] >= np.percentile(self.history["val_recall"], 5):
-                    logging.info("Saving checkpoint with metrics >= to targets!")
+                    # logging.info("Saving checkpoint with metrics >= to targets!")
                     self.best_models.append(copy.deepcopy(self.model))
                     self.best_model_scores.append({"training_step_ndx": step_ndx, "val_n_fp": self.history["val_n_fp"][-1],
-                                                   "val_recall": self.history["val_recall"][-1]})
+                                                   "val_recall": self.history["val_recall"][-1],
+                                                   "val_accuracy": self.history["val_accuracy"][-1],
+                                                   "val_fp_per_hr": self.history.get("val_fp_per_hr", [0])[-1]})
                     self.best_val_recall = self.history["val_recall"][-1]
                     self.best_val_accuracy = self.history["val_accuracy"][-1]
 
