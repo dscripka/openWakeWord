@@ -222,6 +222,8 @@ openWakeWord includes an automated utility that greatly simplifies the process o
 
 2) A more detailed [notebook](notebooks/automatic_model_training.ipynb) (also on [Google Colab](https://colab.research.google.com/drive/1yyFH-fpguX2BTAW8wSQxTrJnJTM-0QAd?usp=sharing)) that describes the training process in more details, and enables more customization. This can produce high quality models, but requires more development experience.
 
+For a collection of models trained using the notebooks above by the Home Assistant Community (and with much gratitude to @fwartner), see the excellent repository [here](https://github.com/fwartner/home-assistant-wakewords-collection). 
+
 For users interested in understanding the fundamental concepts behind model training there is a more detailed, educational [tutorial notebook](notebooks/training_models.ipynb) also available. However, this specific notebook is not intended for training production models, and the automated process above is recommended for that purpose.
 
 Fundamentally, a new model requires two data generation and collection steps:
