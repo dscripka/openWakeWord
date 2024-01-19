@@ -269,7 +269,7 @@ class AudioFeatures():
                 result = self._get_melspectrogram(batch)
 
             elif pool:
-                chunksize = batch.shape[0]//ncpu if batch.shape[0]>=ncpu else 1
+                chunksize = batch.shape[0]//ncpu if batch.shape[0] >= ncpu else 1
                 result = np.array(pool.map(self._get_melspectrogram,
                                            batch, chunksize=chunksize))
 
@@ -331,7 +331,7 @@ class AudioFeatures():
                     result = self.embedding_model_predict(batch)
 
                 elif pool:
-                    chunksize = batch.shape[0]//ncpu if batch.shape[0]>=ncpu else 1
+                    chunksize = batch.shape[0]//ncpu if batch.shape[0] >= ncpu else 1
                     result = np.array(pool.map(self._get_embeddings_from_melspec,
                                       batch, chunksize=chunksize))
 
