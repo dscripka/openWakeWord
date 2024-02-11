@@ -224,10 +224,13 @@ class Model():
         return parent_model
 
     def reset(self):
-        """Reset the prediction buffer"""
+        """Reset the prediction and audio feature buffers. Useful for re-initializing the model, though may not be efficient
+        when called too frequently."""
         self.prediction_buffer = defaultdict(partial(deque, maxlen=30))
+        self.preprocessor.reset()
 
-    def predict(self, x: np.ndarray, patience: dict = {}, threshold: dict = {}, timing: bool = False):
+    def predict(self, x: np.ndarray, patience: dict = {},
+                threshold: dict = {}, debounce_time: float = 0.0, timing: bool = False):
         """Predict with all of the wakeword models on the input audio frames
 
         Args:
@@ -242,9 +245,11 @@ class Model():
                              model names and the values are the number of frames. Can reduce false-positive
                              detections at the cost of a lower true-positive rate.
                              By default, this behavior is disabled.
-            threshold (dict): The threshold values to use when the `patience` behavior is enabled.
+            threshold (dict): The threshold values to use when the `patience` or `debounce_time` behavior is enabled.
                               Must be provided as an a dictionary where the keys are the
                               model names and the values are the thresholds.
+            debounce_time (float): The time (in seconds) to wait before returning another non-zero prediction
+                                   after a non-zero prediction. Can preven multiple detections of the same wake-word.
             timing (bool): Whether to return timing information of the models. Can be useful to debug and
                            assess how efficiently models are running on the current hardware.
 
@@ -322,27 +327,40 @@ class Model():
                             )[0][-1]
                             predictions[cls] = verifier_prediction
 
-            # Update prediction buffer, and zero predictions for first 5 frames during model initialization
+            # Zero predictions for first 5 frames during model initialization
             for cls in predictions.keys():
                 if len(self.prediction_buffer[cls]) < 5:
                     predictions[cls] = 0.0
-                self.prediction_buffer[cls].append(predictions[cls])
 
             # Get timing information
             if timing:
                 timing_dict["models"][mdl] = time.time() - model_start
 
         # Update scores based on thresholds or patience arguments
-        if patience != {}:
+        if patience != {} or debounce_time > 0:
             if threshold == {}:
                 raise ValueError("Error! When using the `patience` argument, threshold "
                                  "values must be provided via the `threshold` argument!")
+            if patience != {} and debounce_time > 0:
+                raise ValueError("Error! The `patience` and `debounce_time` arguments cannot be used together!")
             for mdl in predictions.keys():
                 parent_model = self.get_parent_model_from_label(mdl)
-                if parent_model in patience.keys():
-                    scores = np.array(self.prediction_buffer[mdl])[-patience[parent_model]:]
-                    if (scores >= threshold[parent_model]).sum() < patience[parent_model]:
-                        predictions[mdl] = 0.0
+                if predictions[mdl] != 0.0:
+                    if parent_model in patience.keys():
+                        scores = np.array(self.prediction_buffer[mdl])[-patience[parent_model]:]
+                        if (scores >= threshold[parent_model]).sum() < patience[parent_model]:
+                            predictions[mdl] = 0.0
+                    elif debounce_time > 0:
+                        if parent_model in threshold.keys():
+                            n_frames = int(np.ceil(debounce_time/(n_prepared_samples/16000)))
+                            recent_predictions = np.array(self.prediction_buffer[mdl])[-n_frames:]
+                            if predictions[mdl] >= threshold[parent_model] and \
+                               (recent_predictions >= threshold[parent_model]).sum() > 0:
+                                predictions[mdl] = 0.0
+
+        # Update prediction buffer
+        for mdl in predictions.keys():
+            self.prediction_buffer[mdl].append(predictions[mdl])
 
         # (optionally) get voice activity detection scores and update model scores
         if self.vad_threshold > 0:

@@ -39,6 +39,7 @@ import platform
 import pickle
 import tempfile
 import mock
+import wave
 
 # Download models needed for tests
 openwakeword.utils.download_models()
@@ -207,6 +208,48 @@ class TestModels:
                                 " If you want these tests to be run, install this library as shown in the openwakeword documentation."
                                 )
                 assert 1 == 1
+
+    def test_models_with_debounce(self):
+        # Load model with defaults
+        owwModel = openwakeword.Model()
+
+        # Predict with chunks of 1280 with and without debounce
+        predictions = owwModel.predict_clip(os.path.join("tests", "data", "alexa_test.wav"),
+                                            debounce_time=0, threshold={"alexa_v0.1": 0.5})
+        scores = np.array([i['alexa'] for i in predictions])
+
+        predictions = owwModel.predict_clip(os.path.join("tests", "data", "alexa_test.wav"),
+                                            debounce_time=1.25, threshold={"alexa": 0.5})
+        scores_with_debounce = np.array([i['alexa'] for i in predictions])
+        print(scores, scores_with_debounce)
+        assert (scores >= 0.5).sum() > 1
+        assert (scores_with_debounce >= 0.5).sum() == 1
+
+    def test_model_reset(self):
+        # Load the model
+        owwModel = openwakeword.Model()
+
+        # Get test clip and load it
+        clip = os.path.join("tests", "data", "alexa_test.wav")
+        with wave.open(clip, mode='rb') as f:
+            data = np.frombuffer(f.readframes(f.getnframes()), dtype=np.int16)
+
+        # Predict frame by frame
+        for i in range(0, len(data), 1280):
+            prediction = owwModel.predict(data[i:i+1280])
+            if prediction['alexa'] > 0.5:
+                break
+
+        # Assert that next prediction is still > 0.5
+        prediction = owwModel.predict(data[i:i+1280])
+        assert prediction['alexa'] > 0.5
+
+        # Reset the model
+        owwModel.reset()
+
+        # Assert that next prediction is < 0.5
+        prediction = owwModel.predict(data[i:i+1280])
+        assert prediction['alexa'] < 0.5
 
     def test_models_with_vad(self):
         # Load model with defaults

@@ -160,7 +160,7 @@ class AudioFeatures():
 
             self.embedding_model_predict = tflite_embedding_predict
 
-        # Create databuffers
+        # Create databuffers with empty/random data
         self.raw_data_buffer: Deque = deque(maxlen=sr*10)
         self.melspectrogram_buffer = np.ones((76, 32))  # n_frames x num_features
         self.melspectrogram_max_len = 10*97  # 97 is the number of frames in 1 second of 16hz audio
@@ -168,6 +168,14 @@ class AudioFeatures():
         self.raw_data_remainder = np.empty(0)
         self.feature_buffer = self._get_embeddings(np.random.randint(-1000, 1000, 16000*4).astype(np.int16))
         self.feature_buffer_max_len = 120  # ~10 seconds of feature buffer history
+
+    def reset(self):
+        """Reset the internal buffers"""
+        self.raw_data_buffer.clear()
+        self.melspectrogram_buffer = np.ones((76, 32))
+        self.accumulated_samples = 0
+        self.raw_data_remainder = np.empty(0)
+        self.feature_buffer = self._get_embeddings(np.random.randint(-1000, 1000, 16000*4).astype(np.int16))
 
     def _get_melspectrogram(self, x: Union[np.ndarray, List], melspec_transform: Callable = lambda x: x/10 + 2):
         """
