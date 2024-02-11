@@ -254,6 +254,9 @@ Future release road maps may have non-english support. In particular, [Mycroft.A
 **Is there a C++ version of openWakeWord?**
 - While the ONNX runtime [also has a C++ API](https://onnxruntime.ai/docs/get-started/with-cpp.html), there isn't an official C++ implementation of the full openWakeWord library. However, [@synesthesiam](https://github.com/synesthesiam) has created a [C++ version of openWakeWord](https://github.com/rhasspy/openWakeWord-cpp) with basic functionality implemented.
 
+**Is openWakeWord suitable for edge devices and microcontrollers?**
+- openWakeWord is generally small and efficient, but likely not enough to be suitable for deployment on very low power edge devices. For example, some experimentation by other openWakeWord users & contributors indicates that it may still take several seconds to process a single 80 ms frame on an [ESP32-S3](https://www.espressif.com/en/products/socs/esp32-s3) with quantized openWakeWord models. Instead, I would recommend the excellent [microWakeWord](https://github.com/kahrendt/microWakeWord) library from @kahrendt. It uses a similar synthetic-only training data approach and can produce high quality models that are efficient enough to run on very low power edge devices.
+
 **Why are there three separate models instead of just one?**
 - Separating the models was an intentional choice to provide flexibility and optimize the efficiency of the end-to-end prediction process. For example, with separate melspectrogram, embedding, and prediction models, each one can operate on different size inputs of audio to optimize overall latency and share computations between models. It certainly is possible to make a combined model with all of the steps integrated, though, if that was a requirement of a particular use case.
 
