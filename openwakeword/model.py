@@ -224,8 +224,10 @@ class Model():
         return parent_model
 
     def reset(self):
-        """Reset the prediction buffer"""
+        """Reset the prediction and audio feature buffers. Useful for re-initializing the model, though may not be efficient
+        when called too frequently."""
         self.prediction_buffer = defaultdict(partial(deque, maxlen=30))
+        self.preprocessor.reset()
 
     def predict(self, x: np.ndarray, patience: dict = {},
                 threshold: dict = {}, debounce_time: float = 0.0, timing: bool = False):
