@@ -327,11 +327,10 @@ class Model():
                             )[0][-1]
                             predictions[cls] = verifier_prediction
 
-            # Update prediction buffer, and zero predictions for first 5 frames during model initialization
+            # Zero predictions for first 5 frames during model initialization
             for cls in predictions.keys():
                 if len(self.prediction_buffer[cls]) < 5:
                     predictions[cls] = 0.0
-                self.prediction_buffer[cls].append(predictions[cls])
 
             # Get timing information
             if timing:
@@ -346,14 +345,22 @@ class Model():
                 raise ValueError("Error! The `patience` and `debounce_time` arguments cannot be used together!")
             for mdl in predictions.keys():
                 parent_model = self.get_parent_model_from_label(mdl)
-                if parent_model in patience.keys():
-                    scores = np.array(self.prediction_buffer[mdl])[-patience[parent_model]:]
-                    if (scores >= threshold[parent_model]).sum() < patience[parent_model]:
-                        predictions[mdl] = 0.0
-                if debounce_time > 0:
-                    n_frames = int(debounce_time*1000/80)
-                    if (np.array(self.prediction_buffer[mdl])[-n_frames:] >= threshold[parent_model]).sum() > 0:
-                        predictions[mdl] = 0.0
+                if predictions[mdl] != 0.0:
+                    if parent_model in patience.keys():
+                        scores = np.array(self.prediction_buffer[mdl])[-patience[parent_model]:]
+                        if (scores >= threshold[parent_model]).sum() < patience[parent_model]:
+                            predictions[mdl] = 0.0
+                    elif debounce_time > 0:
+                        if parent_model in threshold.keys():
+                            n_frames = int(np.ceil(debounce_time/(n_prepared_samples/16000)))
+                            recent_predictions = np.array(self.prediction_buffer[mdl])[-n_frames:]
+                            if predictions[mdl] >= threshold[parent_model] and \
+                               (recent_predictions >= threshold[parent_model]).sum() > 0:
+                                predictions[mdl] = 0.0
+
+        # Update prediction buffer
+        for mdl in predictions.keys():
+            self.prediction_buffer[mdl].append(predictions[mdl])
 
         # (optionally) get voice activity detection scores and update model scores
         if self.vad_threshold > 0:

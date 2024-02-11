@@ -208,6 +208,25 @@ class TestModels:
                                 )
                 assert 1 == 1
 
+    def test_models_with_debounce(self):
+        # Load model with defaults
+        owwModel = openwakeword.Model()
+
+        # Get test clip
+        os.path.join("tests", "data", "alexa_test.wav")
+
+        # Predict with chunks of 1280 with and without debounce
+        predictions = owwModel.predict_clip(os.path.join("tests", "data", "alexa_test.wav"),
+                                            debounce_time=0, threshold={"alexa_v0.1": 0.5})
+        scores = np.array([i['alexa'] for i in predictions])
+
+        predictions = owwModel.predict_clip(os.path.join("tests", "data", "alexa_test.wav"),
+                                            debounce_time=1.25, threshold={"alexa": 0.5})
+        scores_with_debounce = np.array([i['alexa'] for i in predictions])
+        print(scores, scores_with_debounce)
+        assert (scores >= 0.5).sum() > 1
+        assert (scores_with_debounce >= 0.5).sum() == 1
+
     def test_models_with_vad(self):
         # Load model with defaults
         owwModel = openwakeword.Model(vad_threshold=0.5)
