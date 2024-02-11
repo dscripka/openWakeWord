@@ -12,7 +12,7 @@ openWakeWord is an open-source wakeword library that can be used to create voice
 # Updates
 
 **2024/02/11**
-- v0.6.0 of openWakeWord released. See the [changelog](CHANGELOG.md) for a full descriptions of new features and changes.
+- v0.6.0 of openWakeWord released. See the [releases](https://github.com/dscripka/openWakeWord/releases) for a full descriptions of new features and changes.
 
 **2023/11/09**
 - Added example scripts under `examples/web` that demonstrate streaming audio from a web application into openWakeWord.
@@ -21,7 +21,7 @@ openWakeWord is an open-source wakeword library that can be used to create voice
 - Significant improvements to the process of [training new models](#training-new-models), including an example Google Colab notebook demonstrating how to train a basic wake word model in <1 hour.
 
 **2023/06/15**
-- v0.5.0 of openWakeWord released. See the [changelog](CHANGELOG.md) for a full descriptions of new features and changes.
+- v0.5.0 of openWakeWord released. See the [releases](https://github.com/dscripka/openWakeWord/releases) for a full descriptions of new features and changes.
 
 # Demo
 
