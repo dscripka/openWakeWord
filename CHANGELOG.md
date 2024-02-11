@@ -1,5 +1,17 @@
 # Change Log
 
+## v0.6.0 - 2023/06/15
+
+### Added
+
+* Various bug fixes, and some new functionality in `model.py` to control repeated detections
+
+### Changed
+
+* Models are no longer included in the PyPi package, and must be downloaded separately
+
+### Removed
+
 ## v0.5.0 - 2023/06/15
 
 ### Added
