@@ -11,6 +11,9 @@ openWakeWord is an open-source wakeword library that can be used to create voice
 
 # Updates
 
+**2024/02/11**
+- v0.6.0 of openWakeWord released. See the [changelog](CHANGELOG.md) for a full descriptions of new features and changes.
+
 **2023/11/09**
 - Added example scripts under `examples/web` that demonstrate streaming audio from a web application into openWakeWord.
 
@@ -140,7 +143,7 @@ The table below lists each model, examples of the word/phrases it is trained to 
 | current weather | "what's the weather" | [docs](docs/models/weather.md) |
 | timers | "set a 10 minute timer" | [docs](docs/models/timers.md) |
 
-Based on the methods discussed in [performance testing](#performance-and-evaluation), each included model aims to meet the target performance criteria of <5% false-reject rates and <0.5/hour false-accept rates with appropriate threshold tuning. These levels are subjective, but hopefully are below the annoyance threshold where the average user becomes frustrated with a system that often misses intended activations and/or causes disruption by activating too frequently at undesired times. For example, at these performance levels a user could expect to have the model process continuous mixed content audio of several hours with at most a few false activations, and have a failed intended activation in only 1/20 attempts (and a failed retry in only 1/400 attempts). 
+Based on the methods discussed in [performance testing](#performance-and-evaluation), each included model aims to meet the target performance criteria of <5% false-reject rates and <0.5/hour false-accept rates with appropriate threshold tuning. These levels are subjective, but hopefully are below the annoyance threshold where the average user becomes frustrated with a system that often misses intended activations and/or causes disruption by activating too frequently at undesired times. For example, at these performance levels a user could expect to have the model process continuous mixed content audio of several hours with at most a few false activations, and have a failed intended activation in only 1/20 attempts (and a failed retry in only 1/400 attempts).
 
 If you have a new wake word or phrase that you would like to see included in the next release, please open an issue, and we'll do a best to train a model! The focus of these requests and future release will be on words and phrases that have broad general usage versus highly specific application.
 
@@ -222,7 +225,7 @@ openWakeWord includes an automated utility that greatly simplifies the process o
 
 2) A more detailed [notebook](notebooks/automatic_model_training.ipynb) (also on [Google Colab](https://colab.research.google.com/drive/1yyFH-fpguX2BTAW8wSQxTrJnJTM-0QAd?usp=sharing)) that describes the training process in more details, and enables more customization. This can produce high quality models, but requires more development experience.
 
-For a collection of models trained using the notebooks above by the Home Assistant Community (and with much gratitude to @fwartner), see the excellent repository [here](https://github.com/fwartner/home-assistant-wakewords-collection). 
+For a collection of models trained using the notebooks above by the Home Assistant Community (and with much gratitude to @fwartner), see the excellent repository [here](https://github.com/fwartner/home-assistant-wakewords-collection).
 
 For users interested in understanding the fundamental concepts behind model training there is a more detailed, educational [tutorial notebook](notebooks/training_models.ipynb) also available. However, this specific notebook is not intended for training production models, and the automated process above is recommended for that purpose.
 
