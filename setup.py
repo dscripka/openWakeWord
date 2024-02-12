@@ -64,7 +64,7 @@ setuptools.setup(
                     'pytest-mypy>=0.10.0,<1',
                     'acoustics>=0.2.6,<1',
                     'pyyaml>=6.0,<7',
-                    'tensorflow-cpu==2.8.1',
+                    'tensorflow-cpu==2.12.1',
                     'tensorflow_probability==0.16.0',
                     'protobuf>=3.20,<4',
                     'onnx_tf==1.10.0',
