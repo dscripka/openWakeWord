@@ -813,13 +813,13 @@ if __name__ == '__main__':
     # Create openwakeword model
     if args.train_model is True:
         F = openwakeword.utils.AudioFeatures(device='cpu')
-        input_shape = F.get_embedding_shape(config["total_length"]//16000)  # training data is always 16 khz
+        input_shape = np.load(os.path.join(feature_save_dir, "positive_features_test.npy")).shape[1:]
 
         oww = Model(n_classes=1, input_shape=input_shape, model_type=config["model_type"],
                     layer_dim=config["layer_size"], seconds_per_example=1280*input_shape[0]/16000)
 
         # Create data transform function for batch generation to handle differ clip lengths (todo: write tests for this)
-        def f(x, n=16):
+        def f(x, n=input_shape[0]):
             """Simple transformation function to ensure negative data is the appropriate shape for the model size"""
             if n > x.shape[1] or n < x.shape[1]:
                 x = np.vstack(x)
