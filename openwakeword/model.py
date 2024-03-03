@@ -41,6 +41,8 @@ class Model():
             class_mapping_dicts: List[dict] = [],
             enable_speex_noise_suppression: bool = False,
             vad_threshold: float = 0,
+            verifier_model: bool = False,
+            verifier_reference_clips: dict = {},
             custom_verifier_models: dict = {},
             custom_verifier_threshold: float = 0.1,
             inference_framework: str = "tflite",
@@ -66,6 +68,14 @@ class Model():
                                    For every input audio frame, a VAD score is obtained and only those model predictions
                                    with VAD scores above the threshold will be returned. The default value (0),
                                    disables voice activity detection entirely.
+            verifier_model (bool): Whether to use the pre-trained universal verifier model to verify predictions from the
+                                   base wakeword models. Requires that reference clips for each wakeword model are provided
+                                   in the `verifier_reference_clips` argument.
+            verifier_reference_clips (dict): A dictionary of reference clips for each wakeword model, where the keys are the
+                                            model names (corresponding to the openwakeword.MODELS attribute) and the values
+                                            are lists of filepaths for the reference clips. Each reference clips should be several
+                                            seconds long and contain the wakeword/phrase that the target model is trained
+                                            to detect.
             custom_verifier_models (dict): A dictionary of paths to custom verifier models, where
                                            the keys are the model names (corresponding to the openwakeword.MODELS
                                            attribute) and the values are the filepaths of the
@@ -105,6 +115,7 @@ class Model():
         self.model_outputs = {}
         self.model_prediction_function = {}
         self.class_mapping = {}
+        self.verifier_reference_clips = verifier_reference_clips
         self.custom_verifier_models = {}
         self.custom_verifier_threshold = custom_verifier_threshold
 
@@ -194,6 +205,54 @@ class Model():
                     " that has the same base models but doesn't have custom verifier models."
                 )
 
+        # Load universal verifier model
+        if verifier_model:
+            # Load model for the appropriate inference framework
+            if inference_framework == "onnx":
+                sessionOptions = ort.SessionOptions()
+                sessionOptions.inter_op_num_threads = 1
+                sessionOptions.intra_op_num_threads = 1
+
+                self.verifier_model = ort.InferenceSession(verifer_model_path, sess_options=sessionOptions,
+                                                          providers=["CPUExecutionProvider"])
+                self.verifier_model_input = self.verifier_model.get_inputs()[0].shape[1]
+                self.verifier_model_output = self.verifier_model.get_outputs()[0].shape[1]
+                self.verifier_model_prediction_function = functools.partial(onnx_predict, self.verifier_model)
+            if inference_framework == "tflite":
+                self.verifier_model = tflite.Interpreter(model_path=verifer_model_path, num_threads=1)
+                self.verifier_model.allocate_tensors()
+                tflite_input_index = self.verifier_model.get_input_details()[0]['index']
+                tflite_output_index = self.verifier_model.get_output_details()[0]['index']
+                self.verifier_model_prediction_function = functools.partial(tflite_predict, self.verifier_model,
+                                                                           tflite_input_index, tflite_output_index)
+
+            # Load and process reference clips
+            if verifier_reference_clips == {}:
+                raise ValueError("A universal verifier model was provided, but no reference clips for models were provided!")
+
+            reference_features = collections.defaultdict(list)
+            for model in verifier_reference_clips.keys():
+                for clip in tqdm(verifier_reference_clips[model], desc=f"Processing universal verifier reference clips for {model}"):
+                    # Self reset model
+                    self.reset()
+
+                    # Load audio clip as 16-bit PCM data
+                    with wave.open(clip, mode='rb') as f:
+                        # Load WAV clip frames
+                        dat = np.frombuffer(f.readframes(f.getnframes()), dtype=np.int16)
+
+                    # Get audio features
+                    dat = np.pad(dat, (16000, 16000))
+                    fs = []
+                    for i in range(0, len(dat)-chunk, chunk):
+                        p = self.predict(dat[i:i+chunk])
+                        if p[model] >= 0.9:
+                            verifier_input_shape = self.verifier_model.get_inputs()[0].shape[1]
+                            fs.append((p[model], oww.preprocessor.get_features(verifier_input_shape)[0]))
+
+                    fs_sorted = sorted(fs, key=lambda x: x[0], reverse=True)
+                    reference_features[model].append(fs_sorted[0][1])
+
         # Create buffer to store frame predictions
         self.prediction_buffer: DefaultDict[str, deque] = defaultdict(partial(deque, maxlen=30))
 
@@ -249,7 +308,7 @@ class Model():
                               Must be provided as an a dictionary where the keys are the
                               model names and the values are the thresholds.
             debounce_time (float): The time (in seconds) to wait before returning another non-zero prediction
-                                   after a non-zero prediction. Can preven multiple detections of the same wake-word.
+                                   after a non-zero prediction. Can prevent multiple detections of the same wake-word.
             timing (bool): Whether to return timing information of the models. Can be useful to debug and
                            assess how efficiently models are running on the current hardware.
 
@@ -384,6 +443,44 @@ class Model():
             return predictions, timing_dict
         else:
             return predictions
+
+    def verify(self, model, max_reference_clips: int = 10, reference_clip_selection: str = "similarity"):
+        """Verify the predictions from the base wakeword models using the universal verifier model
+
+        Args:
+            model (str): The name of the base wakeword model prediction to verify
+            max_reference_clips (int): The maximum number of reference clips to use for each model. Higher values
+                                       will increase the accuracy of the verifier model, but also increase the
+                                       latency of the verification process.
+            reference_clip_selection (str): The method to use to select reference clips for each model.
+                                            Can be either "random" to select a random subset of reference clips,
+                                            "similarity" to identify the reference clips most similar to the
+                                            current audio features, or "all" to use all of the reference clips for
+                                            each model.
+
+        Returns:
+            float: The verification score for the input model prediction (average score from reference clips)
+        """
+        # Get latest features in the shape required by the verifier model
+        verifier_input_shape = self.verifier_model.get_inputs()[0].shape[1]
+        current_features = self.preprocessor.get_features(verifier_input_shape)
+
+        # Make the predictions using the reference features
+        ref_features = np.vstack(self.verifier_reference_clips[model])
+        if ref_features.shape[0] > max_reference_clips:
+            if reference_clip_selection == "random":
+                ref_features = ref_features[np.random.choice(ref_features.shape[0], max_reference_clips, replace=False)]
+            elif reference_clip_selection == "similarity":
+                A = i.flatten()
+                B = comparison_features[0].flatten()
+                sims.append(np.dot(A, B) / (np.linalg.norm(A) * np.linalg.norm(B)))
+                ref_features = ref_features[np.array(sims).argsort()[::-1][0:max_reference_clips]]
+
+        # Get predictions from the verifier model
+        batch_features = np.concatenate((ref_features, i[None,].repeat(current_features.shape[0], axis=0)), axis=1)
+        verifier_predictions = self.verifier_model_prediction_function(batch_features).flatten()
+
+        return verifier_predictions.mean()
 
     def predict_clip(self, clip: Union[str, np.ndarray], padding: int = 1, chunk_size=1280, **kwargs):
         """Predict on an full audio clip, simulating streaming prediction.
