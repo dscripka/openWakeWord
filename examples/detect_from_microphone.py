@@ -31,14 +31,15 @@ parser.add_argument(
     "--model_path",
     help="The path of a specific model to load",
     type=str,
-    default="",
+    # default="/Users/SAI/Documents/Code/wakeWord/wakeWordForked/Untitled/notebooks/openwakeword/openwakeword/resources/models/hey_stryker_dipco_1.onnx",
+    default="notebooks/openwakeword/openwakeword/resources/models/hey_Zelda_med_multi_phrase.onnx",
     required=False
 )
 parser.add_argument(
     "--inference_framework",
     help="The inference framework to use (either 'onnx' or 'tflite'",
     type=str,
-    default='tflite',
+    default='onnx',
     required=False
 )
 
@@ -54,6 +55,7 @@ mic_stream = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True,
 
 # Load pre-trained openwakeword models
 if args.model_path != "":
+    # owwModel = Model(wakeword_models=[args.model_path], inference_framework=args.inference_framework, custom_verifier_models={"hey_stryker_dipco_1":"/Users/SAI/Documents/Code/wakeWord/wakeWordForked/Untitled/notebooks/openwakeword/openwakeword/resources/models/hey_stryker_epp_verifier (1).pkl"}, custom_verifier_threshold=0.3)
     owwModel = Model(wakeword_models=[args.model_path], inference_framework=args.inference_framework)
 else:
     owwModel = Model(inference_framework=args.inference_framework)

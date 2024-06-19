@@ -43,7 +43,7 @@ parser.add_argument(
     "--output_dir",
     help="Where to save the audio that resulted in an activation",
     type=str,
-    default="positivedetections/hey_Stryker/v1",
+    default="positivedetections/meeting_test/june_19_standup/hey_zelda_multi_phrase",
     required=False
 )
 parser.add_argument(
@@ -80,7 +80,7 @@ parser.add_argument(
     "--model_path",
     help="The path of a specific model to load",
     type=str,
-    default="/Users/SAI/Documents/Code/wakeWord/wakeWordForked/Untitled/notebooks/openwakeword/openwakeword/resources/models/hey_stryker_dipco_1.onnx",
+    default="notebooks/openwakeword/openwakeword/resources/models/hey_Zelda_med_multi_phrase.onnx",
     required=False
 )
 parser.add_argument(

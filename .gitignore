@@ -127,3 +127,10 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# generated audio
+*.wav
+*.m4a
+
+# generated features
+*.npy
