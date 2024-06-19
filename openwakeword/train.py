@@ -865,7 +865,7 @@ if __name__ == '__main__':
                                               batch_size=None, num_workers=n_cpus, prefetch_factor=16)
 
         X_val_fp = np.load(config["false_positive_validation_data_path"])
-        X_val_fp = np.array([X_val_fp[i:i+input_shape[0]] for i in range(0, X_val_fp.shape[0]-input_shape[0], 1)])  # reshape to match model
+        # X_val_fp = np.array([X_val_fp[i:i+input_shape[0]] for i in range(0, X_val_fp.shape[0]-input_shape[0], 1)])  # reshape to match model
         X_val_fp_labels = np.zeros(X_val_fp.shape[0]).astype(np.float32)
         X_val_fp = torch.utils.data.DataLoader(
             torch.utils.data.TensorDataset(torch.from_numpy(X_val_fp), torch.from_numpy(X_val_fp_labels)),
