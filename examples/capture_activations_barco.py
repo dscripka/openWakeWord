@@ -80,7 +80,7 @@ parser.add_argument(
     "--model_path",
     help="The path of a specific model to load",
     type=str,
-    default="notebooks/openwakeword/openwakeword/resources/models/hey_barcoh_v1.onnx",
+    default="wakeword_models/hey_barco/hey_barcoh (2).onnx",
     required=False
 )
 parser.add_argument(
