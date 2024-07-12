@@ -96,8 +96,12 @@ class AudioFeatures():
             try:
                 import tflite_runtime.interpreter as tflite
             except ImportError:
-                raise ValueError("Tried to import the TFLite runtime, but it was not found."
-                                 "Please install it using `pip install tflite-runtime`")
+                try:
+                    from tensorflow.lite.python import interpreter as tflite
+                except ImportError:
+                    raise ValueError("Tried to import the TFLite runtime, but it was not found."
+                                    "Neither was the TensorFlow interpreter."
+                                    "Please install TFLite runtime using `pip install tflite-runtime`")
 
             if melspec_model_path == "":
                 melspec_model_path = os.path.join(pathlib.Path(__file__).parent.resolve(),
