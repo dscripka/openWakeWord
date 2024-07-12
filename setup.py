@@ -31,6 +31,7 @@ setuptools.setup(
         'onnxruntime>=1.10.0,<2',
         'tflite-runtime>=2.8.0,<3; platform_system == "Linux"',
         'tqdm>=4.0,<5.0',
+        'numpy<1.25.0,>=1.23.2',
         'scipy>=1.3,<2',
         'scikit-learn>=1,<2',
         'requests>=2.0,<3',
