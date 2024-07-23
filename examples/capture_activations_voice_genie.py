@@ -43,7 +43,7 @@ parser.add_argument(
     "--output_dir",
     help="Where to save the audio that resulted in an activation",
     type=str,
-    default="positivedetections/meeting_test/june_20_standup/hey_zelda_multi_phrase",
+    default="positivedetections/meeting_test/june_20_standup/voice_genie_v01",
     required=False
 )
 parser.add_argument(
@@ -80,7 +80,7 @@ parser.add_argument(
     "--model_path",
     help="The path of a specific model to load",
     type=str,
-    default="/Users/SAI/Documents/Code/wakeWord/wakeWordForked/Untitled/wakeword_models/hey_zelda/hey_Zelda_med_multi_phrase.onnx",
+    default="/Users/SAI/Documents/Code/wakeWord/wakeWordForked/Untitled/wakeword_models/voice_genie/voice_genie_v01.onnx",
     required=False
 )
 parser.add_argument(
@@ -118,29 +118,6 @@ if args.model_path != "":
 else:
     owwModel = Model(inference_framework=args.inference_framework)
 
-
-# # Load pre-trained openwakeword models
-# if args.model_path:
-#     model_paths = openwakeword.get_pretrained_model_paths()
-#     for path in model_paths:
-#         if args.model_path in path:
-#             model_path = path
-            
-#     if model_path:
-#         owwModel = Model(
-#             wakeword_models=[model_path],
-#             enable_speex_noise_suppression=args.noise_suppression,
-#             vad_threshold = args.vad_threshold,
-#             inference_framework=args.inference_framework
-#         )
-#     else: 
-#         print(f'Could not find model \"{args.model_path}\"')
-#         exit()
-# else:
-#     owwModel = Model(
-#         enable_speex_noise_suppression=args.noise_suppression,
-#         vad_threshold=args.vad_threshold
-#     )
 
 # Set waiting period after activation before saving clip (to get some audio context after the activation)
 save_delay = 1  # seconds

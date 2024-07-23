@@ -988,9 +988,14 @@ def generate_adversarial_texts(input_text: str, N: int, include_partial_phrase: 
 
         if include_partial_phrase is not None and len(input_text.split()) > 1 and np.random.random() <= include_partial_phrase:
             n_words = np.random.randint(1, len(input_text.split())+1)
-            adversarial_texts.append(" ".join(np.random.choice(txts, size=n_words, replace=False)))
+            if len(txts) >= n_words:
+                adversarial_texts.append(" ".join(np.random.choice(txts, size=n_words, replace=False)))
+            else:
+                # Handle the case where there are fewer words than required
+                adversarial_texts.append(" ".join(np.random.choice(txts, size=n_words, replace=True)))
         else:
             adversarial_texts.append(" ".join(txts))
+
 
     # Remove any exact matches to input phrase
     adversarial_texts = [i for i in adversarial_texts if i != input_text]

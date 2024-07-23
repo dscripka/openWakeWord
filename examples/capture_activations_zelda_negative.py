@@ -43,7 +43,7 @@ parser.add_argument(
     "--output_dir",
     help="Where to save the audio that resulted in an activation",
     type=str,
-    default="positivedetections/meeting_test/june_19_standup/hey_zelda_multi_phrase",
+    default="positivedetections/meeting_test/june_20_standup/hey_zelda_negative",
     required=False
 )
 parser.add_argument(
