@@ -35,7 +35,8 @@ setuptools.setup(
     ],
     extras_require={
         'onnx': ['onnxruntime>=1.10.0,<2'],
-        'tflite': ['tflite-runtime>=2.8.0,<3; platform_system == "Linux"'],
+        'tflite': ['tflite-runtime>=2.8.0,<3'],
+        'litert': ['ai-edge-litert>=1.0.1,<2'],
         'test': [
                     'pytest>=7.2.0,<8',
                     'pytest-cov>=2.10.1,<3',
