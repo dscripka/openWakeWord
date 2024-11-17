@@ -119,15 +119,16 @@ class Model():
                     return tflite_interpreter.get_tensor(output_index)[None, ]
 
             except ImportError:
-                try:
+                from importlib.util import find_spec
+                if find_spec("tensorflow") is not None and find_spec("tflite_runtime") is None:
+                    logging.warning("Tried to import the tflite runtime, but it was not found. Using tensorflow instead.")
                     from tensorflow.lite.python import interpreter as tflite
 
                     def tflite_predict(tflite_interpreter, input_index, output_index, x):
                         tflite_interpreter.set_tensor(input_index, x)
                         tflite_interpreter.invoke()
                         return tflite_interpreter.get_tensor(output_index)[None, ]
-
-                except ImportError:
+                else:
                     logging.warning("Tried to import the tflite runtime, but it was not found. "
                                     "Trying to switching to onnxruntime instead, if appropriate models are available.")
                     if wakeword_models != [] and all(['.onnx' in i for i in wakeword_models]):
