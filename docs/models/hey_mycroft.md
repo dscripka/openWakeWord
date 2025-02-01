@@ -75,7 +75,7 @@ The positive test examples of the "hey mycroft" wakeword were collected manually
 
 The false-accept/false-reject curve for the model on the test data is shown below. Decreasing the `threshold` parameter when using the model will increase the false-accept rate and decrease the false-reject rate.
 
-![FPR/FRR curve for "hey mycroft" pre-trained model](images/hey_mycroft_performance_plot.png)
+![FPR/FRR curve for "hey mycroft" pre-trained model](images/hey_mycroft_performance.png)
 
 # Other Considerations
 
