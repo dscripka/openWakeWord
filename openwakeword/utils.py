@@ -94,7 +94,7 @@ class AudioFeatures():
 
         elif inference_framework == "tflite":
             try:
-                import tflite_runtime.interpreter as tflite
+                import ai_edge_litert.interpreter as tflite
             except ImportError:
                 raise ValueError("Tried to import the TFLite runtime, but it was not found."
                                  "Please install it using `pip install tflite-runtime`")
