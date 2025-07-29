@@ -11,12 +11,12 @@ testpaths = [
 ]
 
 [project]
-name = "openwakeword"
+name = "private-assistant-openwakeword"
 version = "0.6.0"
 authors = [
-  { name="David Scripka", email="david.scripka@gmail.com" },
+  { name="stkr22", email="stkr22@github.com" },
 ]
-description = "An open-source audio wake word (or phrase) detection framework with a focus on performance and simplicity"
+description = "An open-source audio wake word (or phrase) detection framework with a focus on performance and simplicity. Fork of the original package."
 readme = "README.md"
 requires-python = ">=3.7"
 classifiers = [
@@ -27,4 +27,4 @@ classifiers = [
 dynamic = ["dependencies", "optional-dependencies"]
 
 [project.urls]
-"Homepage" = "https://github.com/dscripka/openWakeWord"
+"Homepage" = "https://github.com/stkr22/openWakeWord"
