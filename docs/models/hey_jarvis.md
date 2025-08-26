@@ -50,7 +50,7 @@ Clips were generated both with the trained speaker embeddings, and also mixtures
 
 The following phrases were included in the training data:
 
-1) "hey mycroft"
+1) "hey jarvis"
 
 After generating the synthetic positive wakewords, they are augmented in two ways:
 
