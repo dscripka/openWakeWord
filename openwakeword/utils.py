@@ -94,10 +94,14 @@ class AudioFeatures():
 
         elif inference_framework == "tflite":
             try:
-                import tflite_runtime.interpreter as tflite
+                # Attempt to import the newer LiteRT runtime
+                import ai_edge_litert.interpreter as tflite
             except ImportError:
-                raise ValueError("Tried to import the TFLite runtime, but it was not found."
-                                 "Please install it using `pip install tflite-runtime`")
+                try:
+                    # Fallback to the original tflite_runtime if LiteRT is unavailable
+                    import tflite_runtime.interpreter as tflite
+                except ImportError:
+                    raise ImportError("Neither LiteRT nor TensorFlow Lite runtime found. Please install `ai_edge_litert` or `tflite_runtime`.")
 
             if melspec_model_path == "":
                 melspec_model_path = os.path.join(pathlib.Path(__file__).parent.resolve(),

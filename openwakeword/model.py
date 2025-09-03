@@ -111,7 +111,15 @@ class Model():
         # Do imports for  inference framework
         if inference_framework == "tflite":
             try:
-                import tflite_runtime.interpreter as tflite
+                try:
+                    # Attempt to import the newer LiteRT runtime
+                    import ai_edge_litert.interpreter as tflite
+                except ImportError:
+                    try:
+                        # Fallback to the original tflite_runtime if LiteRT is unavailable
+                        import tflite_runtime.interpreter as tflite
+                    except ImportError:
+                        raise ImportError("Neither LiteRT nor TensorFlow Lite runtime found. Please install `ai_edge_litert` or `tflite_runtime`.")
 
                 def tflite_predict(tflite_interpreter, input_index, output_index, x):
                     tflite_interpreter.set_tensor(input_index, x)

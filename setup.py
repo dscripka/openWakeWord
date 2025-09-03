@@ -25,17 +25,18 @@ def build_additional_requires():
     return additional_requires
 
 setuptools.setup(
-    name="openwakeword",
-    version="0.6.0",
+    name="private-assistant-openwakeword",
+    version="0.6.1",
     install_requires=[
-        'onnxruntime>=1.10.0,<2',
-        'tflite-runtime>=2.8.0,<3; platform_system == "Linux"',
         'tqdm>=4.0,<5.0',
         'scipy>=1.3,<2',
         'scikit-learn>=1,<2',
         'requests>=2.0,<3',
     ],
     extras_require={
+        'onnx': ['onnxruntime>=1.10.0,<2'],
+        'tflite': ['tflite-runtime>=2.8.0,<3'],
+        'litert': ['ai-edge-litert>=1.0.1,<2'],
         'test': [
                     'pytest>=7.2.0,<8',
                     'pytest-cov>=2.10.1,<3',
@@ -74,14 +75,14 @@ setuptools.setup(
                     'deep-phonemizer==0.0.19'
                 ]
     },
-    author="David Scripka",
-    author_email="david.scripka@gmail.com",
-    description="An open-source audio wake word (or phrase) detection framework with a focus on performance and simplicity",
+    author="stkr22",
+    author_email="stk22@github.com",
+    description="An open-source audio wake word (or phrase) detection framework with a focus on performance and simplicity. Fork of the original package.",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://pypi.org/project/openwakeword",
+    url="https://pypi.org/project/private-assistant-openwakeword",
     project_urls={
-        "Bug Tracker": "https://pypi.org/project/openwakeword/issues",
+        "Bug Tracker": "https://pypi.org/project/private-assistant-openwakeword/issues",
     },
     classifiers=[
         "Programming Language :: Python :: 3",
