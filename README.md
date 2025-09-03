@@ -223,7 +223,7 @@ openWakeWord includes an automated utility that greatly simplifies the process o
 
 1) A simple [Google Colab](https://colab.research.google.com/drive/1q1oe2zOyZp7UsB3jJiQ1IFn8z5YfjwEb?usp=sharing) notebook with an easy to use interface and simple end-to-end process. This allows anyone to produce a custom model very quickly (<1 hour) and doesn't require any development experience, but the performance of the model may be low in some deployment scenarios.
 
-2) A more detailed [notebook](notebooks/automatic_model_training.ipynb) (also on [Google Colab](https://colab.research.google.com/drive/1yyFH-fpguX2BTAW8wSQxTrJnJTM-0QAd?usp=sharing)) that describes the training process in more details, and enables more customization. This can produce high quality models, but requires more development experience.
+2) A more detailed [notebook](notebooks/automatic_model_training.ipynb) that describes the training process in more details, and enables more customization. This can produce high quality models, but requires more development experience.
 
 For a collection of models trained using the notebooks above by the Home Assistant Community (and with much gratitude to @fwartner), see the excellent repository [here](https://github.com/fwartner/home-assistant-wakewords-collection).
 
