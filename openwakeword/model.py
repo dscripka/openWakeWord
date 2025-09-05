@@ -119,16 +119,26 @@ class Model():
                     return tflite_interpreter.get_tensor(output_index)[None, ]
 
             except ImportError:
-                logging.warning("Tried to import the tflite runtime, but it was not found. "
-                                "Trying to switching to onnxruntime instead, if appropriate models are available.")
-                if wakeword_models != [] and all(['.onnx' in i for i in wakeword_models]):
-                    inference_framework = "onnx"
-                elif wakeword_models != [] and all([os.path.exists(i.replace('.tflite', '.onnx')) for i in wakeword_models]):
-                    inference_framework = "onnx"
-                    wakeword_models = [i.replace('.tflite', '.onnx') for i in wakeword_models]
+                from importlib.util import find_spec
+                if find_spec("tensorflow") is not None and find_spec("tflite_runtime") is None:
+                    logging.warning("Tried to import the tflite runtime, but it was not found. Using tensorflow instead.")
+                    from tensorflow.lite.python import interpreter as tflite
+
+                    def tflite_predict(tflite_interpreter, input_index, output_index, x):
+                        tflite_interpreter.set_tensor(input_index, x)
+                        tflite_interpreter.invoke()
+                        return tflite_interpreter.get_tensor(output_index)[None, ]
                 else:
-                    raise ValueError("Tried to import the tflite runtime for provided tflite models, but it was not found. "
-                                     "Please install it using `pip install tflite-runtime`")
+                    logging.warning("Tried to import the tflite runtime, but it was not found. "
+                                    "Trying to switching to onnxruntime instead, if appropriate models are available.")
+                    if wakeword_models != [] and all(['.onnx' in i for i in wakeword_models]):
+                        inference_framework = "onnx"
+                    elif wakeword_models != [] and all([os.path.exists(i.replace('.tflite', '.onnx')) for i in wakeword_models]):
+                        inference_framework = "onnx"
+                        wakeword_models = [i.replace('.tflite', '.onnx') for i in wakeword_models]
+                    else:
+                        raise ValueError("Tried to import the tflite runtime for provided tflite models, but it was not found. "
+                                        "Please install it using `pip install tflite-runtime`")
 
         if inference_framework == "onnx":
             try:
