@@ -41,6 +41,7 @@ class Model():
             class_mapping_dicts: List[dict] = [],
             enable_speex_noise_suppression: bool = False,
             vad_threshold: float = 0,
+            self_confirm: bool = False,
             custom_verifier_models: dict = {},
             custom_verifier_threshold: float = 0.1,
             inference_framework: str = "tflite",
@@ -66,6 +67,10 @@ class Model():
                                    For every input audio frame, a VAD score is obtained and only those model predictions
                                    with VAD scores above the threshold will be returned. The default value (0),
                                    disables voice activity detection entirely.
+            self_confirm (bool): Whether or not to use a copy of the model(s) to confirm predictions. This is a form of test-time
+                                augmentation that can significantly reduce false detections, but also significantly increases
+                                the computational cost of running the model when used. See the `self_confirm` method for more
+                                details on how to leverage this functionality.
             custom_verifier_models (dict): A dictionary of paths to custom verifier models, where
                                            the keys are the model names (corresponding to the openwakeword.MODELS
                                            attribute) and the values are the filepaths of the
@@ -208,6 +213,16 @@ class Model():
         self.vad_threshold = vad_threshold
         if vad_threshold > 0:
             self.vad = openwakeword.VAD()
+
+        # If self-confirm is enabled, load another copy of the model to use for confirmation
+        if self_confirm is True:
+            self.confirmation_model = Model(
+                wakeword_models=wakeword_models,
+                class_mapping_dicts=class_mapping_dicts,
+                self_confirm=False,
+                inference_framework=inference_framework,
+                **kwargs
+            )
 
         # Create AudioFeatures object
         self.preprocessor = AudioFeatures(inference_framework=inference_framework, **kwargs)
@@ -384,6 +399,61 @@ class Model():
             return predictions, timing_dict
         else:
             return predictions
+
+    def self_confirm(self, last_n_seconds: float = 1.5):
+        """
+        Use the confirmation model to confirm the predictions from the main model. This is a form of
+        test-time augmentation that can significantly reduce false detections, but significantly increases
+        computational cost of running the model when used. The confirmation model uses the same audio
+        pre-processer as the main model, but runs on the last `last_n_seconds` seconds of audio
+        to get, essentially, a second opinion on whether a wake-word/phrase was detected. The slight shift in 
+        features that results from using a different segment of audio is more likely to avoid a spurious false detection
+        than a true detection, so this can be a very effective way to reduce false detections.
+
+        Note that there might be a small reduction in true-positive detections when using this method, as
+        the confirmation model might not detect some true wake-word/phrase instances that the main model detects.
+        You are encouraged to experiment with the `last_n_seconds` argument to find the best balance
+        between true-positive and false-positive detections for your use case.
+
+        Args:
+            last_n_seconds (float): The number of seconds of audio to use for confirmation.
+                                    The default (1.5) should be sufficient for most use cases, but increase if your
+                                    target wake-word/phrase is long, or decrease if short.
+        Returns:
+            dict: A dictionary of scores between 0 and 1 for each model, representing the maximum
+                    score from the confirmation model over the last `last_n_seconds` seconds of audio.
+        """
+        # Check for self-confirm functionality
+        if not self.self_confirm:
+            raise ValueError("The self-confirm functionality is not enabled for this model instance!")
+        
+        # Check for at least two cores
+        if os.cpu_count() < 2:
+            raise ValueError("The self-confirm functionality requires at least two CPU cores, as it uses threading.")
+        
+        # Get the last n seconds of audio from the audio buffer of the main model, and get the features
+        # with the self-confirmation model preprocessor
+        n_samples = int(last_n_seconds*16000)
+        if len(self.preprocessor.raw_data_buffer) < n_samples:
+            raise ValueError("Not enough audio data has been processed to use the self-confirm functionality!")
+        audio_data = np.array(self.preprocessor.raw_data_buffer)[-n_samples:]
+
+        # Reset the self-confirmation model, if it has been used before
+        if self.confirmation_model.preprocessor.accumulated_samples == 0:
+            self.confirmation_model.reset()
+
+        # Run model to get predictions
+        step_size = 1280
+        predictions = []
+        for i in range(0, audio_data.shape[0]-step_size, step_size):
+            predictions.append(self.confirmation_model.predict(audio_data[i:i+step_size]))
+
+        predictions_dict = {}
+        for mdl in self.confirmation_model.models.keys():
+            predictions_per_model = [p[mdl] for p in predictions]
+            predictions_dict[mdl] = np.max(predictions_per_model)
+
+        return predictions_dict
 
     def predict_clip(self, clip: Union[str, np.ndarray], padding: int = 1, chunk_size=1280, **kwargs):
         """Predict on an full audio clip, simulating streaming prediction.
