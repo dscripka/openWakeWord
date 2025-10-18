@@ -4,19 +4,20 @@ import setuptools
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
+
 # Build extras_requires based on platform
 def build_additional_requires():
-    py_version = platform.python_version()[0:3].replace('.', "")
-    if platform.system() == "Linux" and platform.machine() == "x86_64":
-        additional_requires=[
-            f"speexdsp_ns @ https://github.com/dscripka/openWakeWord/releases/download/v0.1.1/speexdsp_ns-0.1.2-cp{py_version}-cp{py_version}-linux_x86_64.whl",
-        ]
-    elif platform.system() == "Linux" and platform.machine() == "aarch64":
-        additional_requires=[
-            f"speexdsp_ns @ https://github.com/dscripka/openWakeWord/releases/download/v0.1.1/speexdsp_ns-0.1.2-cp{py_version}-cp{py_version}-linux_aarch64.whl",
-        ],
-    elif platform.system() == "Windows" and platform.machine() == "x86_64":
-        additional_requires=[
+    # py_version = platform.python_version()[0:3].replace('.', "")
+    # if platform.system() == "Linux" and platform.machine() == "x86_64":
+    #     additional_requires=[
+    #         f"speexdsp_ns @ https://github.com/dscripka/openWakeWord/releases/download/v0.1.1/speexdsp_ns-0.1.2-cp{py_version}-cp{py_version}-linux_x86_64.whl",
+    #     ]
+    # elif platform.system() == "Linux" and platform.machine() == "aarch64":
+    #     additional_requires=[
+    #         f"speexdsp_ns @ https://github.com/dscripka/openWakeWord/releases/download/v0.1.1/speexdsp_ns-0.1.2-cp{py_version}-cp{py_version}-linux_aarch64.whl",
+    #     ],
+    if platform.system() == "Windows" and platform.machine() == "x86_64":
+        additional_requires = [
             'PyAudioWPatch'
         ]
     else:
@@ -24,12 +25,14 @@ def build_additional_requires():
 
     return additional_requires
 
+
 setuptools.setup(
     name="openwakeword",
     version="0.6.0",
     install_requires=[
         'onnxruntime>=1.10.0,<2',
-        'tflite-runtime>=2.8.0,<3; platform_system == "Linux"',
+        'ai-edge-litert>=2.0.2,<3; platform_system == "Linux" or platform_system == "Darwin"',
+        'speexdsp-ns>=0.1.2,<1; platform_system == "Linux"',
         'tqdm>=4.0,<5.0',
         'scipy>=1.3,<2',
         'scikit-learn>=1,<2',
@@ -40,7 +43,7 @@ setuptools.setup(
                     'pytest>=7.2.0,<8',
                     'pytest-cov>=2.10.1,<3',
                     'pytest-flake8>=1.1.1,<2',
-                    'flake8>=4.0,<4.1',
+                    'flake8>=5.0,<7.1',
                     'pytest-mypy>=0.10.0,<1',
                     'types-requests',
                     'types-PyYAML',
@@ -90,5 +93,5 @@ setuptools.setup(
     ],
     packages=setuptools.find_packages(),
     include_package_data=True,
-    python_requires=">=3.7",
+    python_requires=">=3.10",
 )
