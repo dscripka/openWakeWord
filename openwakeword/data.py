@@ -803,8 +803,8 @@ class mmap_batch_generator:
             self.n_per_class = {}
             for lbl, shape in self.shapes.items():
                 dummy_data = np.random.random((10, self.shapes[lbl][1], self.shapes[lbl][2]))
-                if self.data_transform_funcs.get(lbl, None):
-                    scale_factor = self.data_transform_funcs.get(lbl, None)(dummy_data).shape[0]/10
+                if (transform_func := self.data_transform_funcs.get(lbl, None)):
+                    scale_factor = transform_func(dummy_data).shape[0]/10
 
                 ratio = self.shapes[lbl][0]/sum([i[0] for i in self.shapes.values()])
                 self.n_per_class[lbl] = max(1, int(int(batch_size*ratio)/scale_factor))
