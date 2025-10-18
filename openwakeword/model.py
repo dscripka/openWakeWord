@@ -111,7 +111,7 @@ class Model():
         # Do imports for  inference framework
         if inference_framework == "tflite":
             try:
-                import tflite_runtime.interpreter as tflite
+                import ai_edge_litert.interpreter as tflite
 
                 def tflite_predict(tflite_interpreter, input_index, output_index, x):
                     tflite_interpreter.set_tensor(input_index, x)
@@ -127,8 +127,8 @@ class Model():
                     inference_framework = "onnx"
                     wakeword_models = [i.replace('.tflite', '.onnx') for i in wakeword_models]
                 else:
-                    raise ValueError("Tried to import the tflite runtime for provided tflite models, but it was not found. "
-                                     "Please install it using `pip install tflite-runtime`")
+                    raise ValueError("Tried to import the LiteRT runtime for provided LiteRT models, but it was not found. "
+                                     "Please install it using `pip install ai-edge-litert`")
 
         if inference_framework == "onnx":
             try:

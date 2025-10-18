@@ -62,7 +62,7 @@ def get_reference_clip_features(
     # Get predictions
     for _ in range(N):
         # Load clip
-        if type(reference_clip) == str:
+        if isinstance(reference_clip, str):
             sr, dat = scipy.io.wavfile.read(reference_clip)
         else:
             dat = reference_clip
