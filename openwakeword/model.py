@@ -215,6 +215,7 @@ class Model():
             self.vad = openwakeword.VAD()
 
         # If self-confirm is enabled, load another copy of the model to use for confirmation
+        self.self_confirm_enabled = self_confirm
         if self_confirm is True:
             self.confirmation_model = Model(
                 wakeword_models=wakeword_models,
@@ -406,7 +407,7 @@ class Model():
         test-time augmentation that can significantly reduce false detections, but significantly increases
         computational cost of running the model when used. The confirmation model uses the same audio
         pre-processer as the main model, but runs on the last `last_n_seconds` seconds of audio
-        to get, essentially, a second opinion on whether a wake-word/phrase was detected. The slight shift in 
+        to get, essentially, a second opinion on whether a wake-word/phrase was detected. The slight shift in
         features that results from using a different segment of audio is more likely to avoid a spurious false detection
         than a true detection, so this can be a very effective way to reduce false detections.
 
@@ -424,13 +425,14 @@ class Model():
                     score from the confirmation model over the last `last_n_seconds` seconds of audio.
         """
         # Check for self-confirm functionality
-        if not self.self_confirm:
+        if self.self_confirm_enabled is False:
             raise ValueError("The self-confirm functionality is not enabled for this model instance!")
-        
+
         # Check for at least two cores
-        if os.cpu_count() < 2:
+        cpu_count = os.cpu_count()
+        if cpu_count is None or cpu_count < 2:
             raise ValueError("The self-confirm functionality requires at least two CPU cores, as it uses threading.")
-        
+
         # Get the last n seconds of audio from the audio buffer of the main model, and get the features
         # with the self-confirmation model preprocessor
         n_samples = int(last_n_seconds*16000)
@@ -449,7 +451,7 @@ class Model():
             predictions.append(self.confirmation_model.predict(audio_data[i:i+step_size]))
 
         predictions_dict = {}
-        for mdl in self.confirmation_model.models.keys():
+        for mdl in predictions[0].keys():
             predictions_per_model = [p[mdl] for p in predictions]
             predictions_dict[mdl] = np.max(predictions_per_model)
 
