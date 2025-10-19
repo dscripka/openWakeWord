@@ -13,6 +13,7 @@
 # limitations under the License.
 
 # Imports
+from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 import openwakeword
 from openwakeword.utils import AudioFeatures, re_arg
@@ -42,6 +43,7 @@ class Model():
             enable_speex_noise_suppression: bool = False,
             vad_threshold: float = 0,
             self_confirm: bool = False,
+            self_confirm_ncpus: int = 1,
             custom_verifier_models: dict = {},
             custom_verifier_threshold: float = 0.1,
             inference_framework: str = "tflite",
@@ -71,6 +73,7 @@ class Model():
                                 augmentation that can significantly reduce false detections, but also significantly increases
                                 the computational cost of running the model when used. See the `self_confirm` method for more
                                 details on how to leverage this functionality.
+            self_confirm_ncpus (int): The number of CPU cores to use when running the self-confirmation model.
             custom_verifier_models (dict): A dictionary of paths to custom verifier models, where
                                            the keys are the model names (corresponding to the openwakeword.MODELS
                                            attribute) and the values are the filepaths of the
@@ -222,8 +225,19 @@ class Model():
                 class_mapping_dicts=class_mapping_dicts,
                 self_confirm=False,
                 inference_framework=inference_framework,
-                **kwargs
+                ncpu=self_confirm_ncpus
             )
+            self.confirmation_results = None
+            self.self_confirm_ncpus = self_confirm_ncpus
+
+            # Create thread pool for self_confirm calling
+            self.confirmation_executor = ThreadPoolExecutor(max_workers=1)
+
+            # Force thread pool initialization by submitting a dummy task
+            # This avoids the first-call overhead later
+            def _noop():
+                pass
+            self.confirmation_executor.submit(_noop).result()
 
         # Create AudioFeatures object
         self.preprocessor = AudioFeatures(inference_framework=inference_framework, **kwargs)
@@ -244,6 +258,7 @@ class Model():
         when called too frequently."""
         self.prediction_buffer = defaultdict(partial(deque, maxlen=30))
         self.preprocessor.reset()
+        self.confirmation_results = None
 
     def predict(self, x: np.ndarray, patience: dict = {},
                 threshold: dict = {}, debounce_time: float = 0.0, timing: bool = False):
@@ -401,7 +416,7 @@ class Model():
         else:
             return predictions
 
-    def self_confirm(self, last_n_seconds: float = 1.5):
+    def self_confirm(self, last_n_seconds: float = 1.5, background=False):
         """
         Use the confirmation model to confirm the predictions from the main model. This is a form of
         test-time augmentation that can significantly reduce false detections, but significantly increases
@@ -420,9 +435,14 @@ class Model():
             last_n_seconds (float): The number of seconds of audio to use for confirmation.
                                     The default (1.5) should be sufficient for most use cases, but increase if your
                                     target wake-word/phrase is long, or decrease if short.
+            background (bool): Whether to run the confirmation model in a background thread. If True, the results of
+                               the function will be returned asynchronously and stored in the
+                               `self.confirmation_results` attribute. Until the results are available, this attribute
+                                will be None.
         Returns:
             dict: A dictionary of scores between 0 and 1 for each model, representing the maximum
                     score from the confirmation model over the last `last_n_seconds` seconds of audio.
+                    If background=True, returns None and stores results in self.confirmation_results when ready.
         """
         # Check for self-confirm functionality
         if self.self_confirm_enabled is False:
@@ -430,32 +450,45 @@ class Model():
 
         # Check for at least two cores
         cpu_count = os.cpu_count()
-        if cpu_count is None or cpu_count < 2:
+        if (cpu_count is None or cpu_count < 2) and background is True:
             raise ValueError("The self-confirm functionality requires at least two CPU cores, as it uses threading.")
 
-        # Get the last n seconds of audio from the audio buffer of the main model, and get the features
-        # with the self-confirmation model preprocessor
-        n_samples = int(last_n_seconds*16000)
-        if len(self.preprocessor.raw_data_buffer) < n_samples:
-            raise ValueError("Not enough audio data has been processed to use the self-confirm functionality!")
-        audio_data = np.array(self.preprocessor.raw_data_buffer)[-n_samples:]
+        # Define the function to run predictions
+        def _run_confirmation_predictions():
+            # Get the last n seconds of audio from the audio buffer of the main model, and get the features
+            # with the self-confirmation model preprocessor
+            n_samples = int(last_n_seconds*16000)
+            if len(self.preprocessor.raw_data_buffer) < n_samples:
+                raise ValueError("Not enough audio data has been processed to use the self-confirm functionality!")
+            audio_data = np.fromiter(self.preprocessor.raw_data_buffer, dtype=np.int16)[-n_samples:]
 
-        # Reset the self-confirmation model, if it has been used before
-        if self.confirmation_model.preprocessor.accumulated_samples == 0:
-            self.confirmation_model.reset()
+            # Reset the self-confirmation model, if it has been used before
+            if self.confirmation_model.preprocessor.accumulated_samples == 0:
+                self.confirmation_model.reset()
 
-        # Run model to get predictions
-        step_size = 1280
-        predictions = []
-        for i in range(0, audio_data.shape[0]-step_size, step_size):
-            predictions.append(self.confirmation_model.predict(audio_data[i:i+step_size]))
+            # Run model to get predictions
+            step_size = 1280
+            predictions = []
+            for i in range(0, audio_data.shape[0]-step_size, step_size):
+                predictions.append(self.confirmation_model.predict(audio_data[i:i+step_size]))
 
-        predictions_dict = {}
-        for mdl in predictions[0].keys():
-            predictions_per_model = [p[mdl] for p in predictions]
-            predictions_dict[mdl] = np.max(predictions_per_model)
+            predictions_dict = {}
+            for mdl in predictions[0].keys():
+                predictions_per_model = [p[mdl] for p in predictions]
+                predictions_dict[mdl] = np.max(predictions_per_model)
 
-        return predictions_dict
+            # Store results asynchronously
+            self.confirmation_results = predictions_dict
+
+        # Run in background thread if requested
+        if background:
+            self.confirmation_results = None
+            self.confirmation_executor.submit(_run_confirmation_predictions)
+            return None
+        else:
+            # Run synchronously
+            _run_confirmation_predictions()
+            return self.confirmation_results
 
     def predict_clip(self, clip: Union[str, np.ndarray], padding: int = 1, chunk_size=1280, **kwargs):
         """Predict on an full audio clip, simulating streaming prediction.
