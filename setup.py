@@ -93,5 +93,8 @@ setuptools.setup(
     ],
     packages=setuptools.find_packages(),
     include_package_data=True,
+    package_data={
+        'openwakeword': ['resources/models/*'],
+    },
     python_requires=">=3.10",
 )
