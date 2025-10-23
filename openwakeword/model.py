@@ -416,7 +416,7 @@ class Model():
         else:
             return predictions
 
-    def self_confirm(self, last_n_seconds: float = 1.5, background=False):
+    def self_confirm(self, last_n_seconds: float = 1.5, delay_time: float = 0.250):
         """
         Use the confirmation model to confirm the predictions from the main model. This is a form of
         test-time augmentation that can significantly reduce false detections, but significantly increases
@@ -431,18 +431,22 @@ class Model():
         You are encouraged to experiment with the `last_n_seconds` argument to find the best balance
         between true-positive and false-positive detections for your use case.
 
+        This is a background task to not block the main model from processing audio, so the results
+        of the confirmation model are stored in the `confirmation_results` class attribute once available.
+        This is a dictionary with the same format as the output of the `predict` method, containing the
+        maximum score from the confirmation model over the last `last_n_seconds` seconds of audio, giving a
+        "confirmation" score for each model, indicating if a detection in the `last_n_seconds` seconds of audio
+        was likely valid or not.
+
         Args:
             last_n_seconds (float): The number of seconds of audio to use for confirmation.
                                     The default (1.5) should be sufficient for most use cases, but increase if your
                                     target wake-word/phrase is long, or decrease if short.
-            background (bool): Whether to run the confirmation model in a background thread. If True, the results of
-                               the function will be returned asynchronously and stored in the
-                               `self.confirmation_results` attribute. Until the results are available, this attribute
-                                will be None.
+            delay_time (float): The time (in seconds) to wait before running the confirmation model. This allows the
+                                main model to process enough audio after a detection to ensure that the confirmation
+                                model has enough audio context.
         Returns:
-            dict: A dictionary of scores between 0 and 1 for each model, representing the maximum
-                    score from the confirmation model over the last `last_n_seconds` seconds of audio.
-                    If background=True, returns None and stores results in self.confirmation_results when ready.
+            concurrent.futures.Future: A futures object representing the threading task running the confirmation model.
         """
         # Check for self-confirm functionality
         if self.self_confirm_enabled is False:
@@ -450,11 +454,15 @@ class Model():
 
         # Check for at least two cores
         cpu_count = os.cpu_count()
-        if (cpu_count is None or cpu_count < 2) and background is True:
+        if (cpu_count is None or cpu_count < 2):
             raise ValueError("The self-confirm functionality requires at least two CPU cores, as it uses threading.")
 
         # Define the function to run predictions
         def _run_confirmation_predictions():
+            # Wait to allow main model to process audio
+            if delay_time > 0:
+                time.sleep(delay_time)
+
             # Get the last n seconds of audio from the audio buffer of the main model, and get the features
             # with the self-confirmation model preprocessor
             n_samples = int(last_n_seconds*16000)
@@ -480,15 +488,11 @@ class Model():
             # Store results asynchronously
             self.confirmation_results = predictions_dict
 
-        # Run in background thread if requested
-        if background:
-            self.confirmation_results = None
-            self.confirmation_executor.submit(_run_confirmation_predictions)
-            return None
-        else:
-            # Run synchronously
-            _run_confirmation_predictions()
-            return self.confirmation_results
+        # Submit confirmation prediction task to thread pool
+        self.confirmation_results = None  # reset previous results
+        future = self.confirmation_executor.submit(_run_confirmation_predictions)
+
+        return future
 
     def predict_clip(self, clip: Union[str, np.ndarray], padding: int = 1, chunk_size=1280, **kwargs):
         """Predict on an full audio clip, simulating streaming prediction.
