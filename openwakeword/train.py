@@ -630,6 +630,13 @@ if __name__ == '__main__':
         default="False",
         required=False
     )
+    parser.add_argument(
+        "--convert_to_tflite",
+        help="Convert the trained ONNX model to TFLite format",
+        action="store_true",
+        default="False",
+        required=False
+    )
 
     args = parser.parse_args()
     config = yaml.load(open(args.training_config, 'r').read(), yaml.Loader)
@@ -898,5 +905,6 @@ if __name__ == '__main__':
         oww.export_model(model=best_model, model_name=config["model_name"], output_dir=config["output_dir"])
 
         # Convert the model from onnx to tflite format
-        convert_onnx_to_tflite(os.path.join(config["output_dir"], config["model_name"] + ".onnx"),
-                               os.path.join(config["output_dir"], config["model_name"] + ".tflite"))
+        if args.convert_to_tflite:
+            convert_onnx_to_tflite(os.path.join(config["output_dir"], config["model_name"] + ".onnx"),
+                                   os.path.join(config["output_dir"], config["model_name"] + ".tflite"))
