@@ -785,7 +785,7 @@ class mmap_batch_generator:
         self.label_transform_funcs = label_transform_funcs
 
         # Get array mmaps and store their shapes (but load files < 1 GB total size into memory)
-        self.data = {label: np.load(fl, mmap_mode='r') for label, fl in data_files.items()}
+        self.data = {label: np.load(fl, mmap_mode='r+') for label, fl in data_files.items()}
         self.labels = {label: np.load(fl) for label, fl in label_files.items()}
         self.data_counter = {label: 0 for label in data_files.keys()}
         self.original_shapes = {label: self.data[label].shape for label in self.data.keys()}
