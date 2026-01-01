@@ -1,0 +1,32 @@
+augmentation_batch_size: 16
+augmentation_rounds: 1
+background_paths:
+- ./audioset_16k
+- ./koda_audio
+#- ./fma
+background_paths_duplication_rate:
+- 1
+batch_n_per_class:
+  ACAV100M_sample: 1024
+  adversarial_negative: 400
+  positive: 400
+custom_negative_phrases: []
+false_positive_validation_data_path: validation_set_features.npy
+feature_data_files:
+  ACAV100M_sample: openwakeword_features_ACAV100M_2000_hrs_16bit.npy
+layer_size: 128
+max_negative_weight: 1500
+model_name: koda_stop
+model_type: dnn
+n_samples: 100000
+n_samples_val: 2000
+output_dir: ./koda_stop_24
+piper_sample_generator_path: ./piper-sample-generator
+rir_paths:
+- ./mit_rirs
+steps: 25000
+target_false_positives_per_hour: 2
+target_phrase:
+- koda stop
+tts_batch_size: 50
+include_adversarial_examples: true
