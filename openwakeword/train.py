@@ -905,6 +905,6 @@ if __name__ == '__main__':
         oww.export_model(model=best_model, model_name=config["model_name"], output_dir=config["output_dir"])
 
         # Convert the model from onnx to tflite format
-        if args.convert_to_tflite:
+        if args.convert_to_tflite is True:
             convert_onnx_to_tflite(os.path.join(config["output_dir"], config["model_name"] + ".onnx"),
                                    os.path.join(config["output_dir"], config["model_name"] + ".tflite"))
