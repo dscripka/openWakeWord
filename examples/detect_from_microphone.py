@@ -13,9 +13,10 @@
 # limitations under the License.
 
 # Imports
+import os
 import pyaudio
 import numpy as np
-from openwakeword.model import Model
+import openwakeword
 import argparse
 
 # Parse input arguments
@@ -38,7 +39,7 @@ parser.add_argument(
     "--inference_framework",
     help="The inference framework to use (either 'onnx' or 'tflite'",
     type=str,
-    default='tflite',
+    default='onnx' if os.name == 'nt' else 'tflite',
     required=False
 )
 
@@ -54,9 +55,10 @@ mic_stream = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True,
 
 # Load pre-trained openwakeword models
 if args.model_path != "":
-    owwModel = Model(wakeword_models=[args.model_path], inference_framework=args.inference_framework)
+    owwModel = openwakeword.model.Model(wakeword_models=[args.model_path], inference_framework=args.inference_framework)
 else:
-    owwModel = Model(inference_framework=args.inference_framework)
+    openwakeword.utils.download_models()
+    owwModel = openwakeword.model.Model(inference_framework=args.inference_framework)
 
 n_models = len(owwModel.models.keys())
 
