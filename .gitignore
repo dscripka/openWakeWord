@@ -142,3 +142,6 @@ examples/
 
 # archive files
 archive/
+
+# Downloaded models
+openwakeword/resources
