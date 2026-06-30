@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>openWakeWord — native browser demo</title>
+
+    <!-- Map the bare "onnxruntime-web" import to the CDN ESM build so the
+         library works without a bundler. Swap for a local copy if desired. -->
+    <script type="importmap">
+      {
+        "imports": {
+          "onnxruntime-web": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.27.0/dist/ort.mjs"
+        }
+      }
+    </script>
+
+    <style>
+      :root {
+        --bg: #0d1117;
+        --card: #161b22;
+        --border: #30363d;
+        --text: #e6edf3;
+        --muted: #8b949e;
+        --accent: #2f81f7;
+        --green: #3fb950;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+      }
+      .wrap { max-width: 760px; margin: 0 auto; padding: 32px 20px 64px; }
+      h1 { font-size: 28px; margin: 0 0 4px; }
+      .sub { color: var(--muted); margin: 0 0 24px; }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 20px;
+      }
+      button {
+        font-size: 16px;
+        font-weight: 600;
+        padding: 12px 22px;
+        border-radius: 8px;
+        border: none;
+        cursor: pointer;
+        background: var(--accent);
+        color: #fff;
+        transition: opacity 0.2s, background 0.2s;
+      }
+      button:disabled { opacity: 0.5; cursor: not-allowed; }
+      button.listening { background: var(--green); }
+      .row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+      .status { color: var(--muted); font-size: 14px; }
+      label.opt { display: inline-flex; align-items: center; gap: 6px; margin-right: 14px; font-size: 14px; }
+      .models { display: grid; gap: 14px; }
+      .model {
+        display: grid;
+        grid-template-columns: 160px 1fr 56px;
+        align-items: center;
+        gap: 12px;
+      }
+      .model .name { font-weight: 600; }
+      .model .detected { color: var(--green); font-weight: 700; }
+      .bar {
+        position: relative;
+        height: 14px;
+        background: #21262d;
+        border-radius: 7px;
+        overflow: hidden;
+      }
+      .bar > span {
+        position: absolute; left: 0; top: 0; bottom: 0;
+        width: 0%;
+        background: linear-gradient(90deg, #2f81f7, #3fb950);
+        transition: width 0.08s linear;
+      }
+      .bar.fired > span { background: var(--green); }
+      .score { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; }
+      .toast {
+        position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+        background: var(--green); color: #04130a; font-weight: 700;
+        padding: 14px 24px; border-radius: 10px; opacity: 0;
+        transition: opacity 0.3s; pointer-events: none;
+      }
+      .toast.show { opacity: 1; }
+      code { background: #21262d; padding: 2px 6px; border-radius: 5px; font-size: 13px; }
+      .hint { font-size: 13px; color: var(--muted); margin-top: 10px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>openWakeWord</h1>
+      <p class="sub">Native browser port — wake word detection running fully client-side with ONNX Runtime Web.</p>
+
+      <div class="card">
+        <div class="row">
+          <button id="startBtn" disabled>Loading models…</button>
+          <span class="status" id="status">Initializing…</span>
+        </div>
+        <div class="hint">
+          Threshold:
+          <label class="opt"><input type="range" id="threshold" min="0" max="1" step="0.01" value="0.5" /> <span id="thVal">0.50</span></label>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="models" id="models"></div>
+        <p class="hint">Try saying <code>"hey jarvis"</code>, <code>"alexa"</code>, <code>"hey mycroft"</code>, or <code>"hey rhasspy"</code>.</p>
+      </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script type="module">
+      import { OpenWakeWord, configureOrt } from "../src/openwakeword.js";
+      import { Microphone } from "../src/microphone.js";
+
+      const startBtn = document.getElementById("startBtn");
+      const statusEl = document.getElementById("status");
+      const modelsEl = document.getElementById("models");
+      const toastEl = document.getElementById("toast");
+      const thresholdEl = document.getElementById("threshold");
+      const thValEl = document.getElementById("thVal");
+
+      thresholdEl.addEventListener("input", () => {
+        thValEl.textContent = (+thresholdEl.value).toFixed(2);
+      });
+
+      // Use single-threaded wasm so the demo works without COOP/COEP headers.
+      configureOrt({
+        wasmPaths: "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.27.0/dist/",
+        numThreads: 1,
+      });
+
+      // Which wake word models to load in the demo.
+      const WAKEWORDS = ["alexa", "hey_mycroft", "hey_jarvis", "hey_rhasspy"];
+
+      const rows = {};
+      function buildRows(labels) {
+        modelsEl.innerHTML = "";
+        for (const label of labels) {
+          const el = document.createElement("div");
+          el.className = "model";
+          el.innerHTML = `
+            <div class="name">${label}</div>
+            <div class="bar"><span></span></div>
+            <div class="score">0.00</div>`;
+          modelsEl.appendChild(el);
+          rows[label] = {
+            bar: el.querySelector(".bar"),
+            fill: el.querySelector(".bar > span"),
+            score: el.querySelector(".score"),
+          };
+        }
+      }
+
+      let lastToast = 0;
+      function showToast(text) {
+        toastEl.textContent = `Detected: ${text}`;
+        toastEl.classList.add("show");
+        clearTimeout(lastToast);
+        lastToast = setTimeout(() => toastEl.classList.remove("show"), 1500);
+      }
+
+      let oww, mic;
+      let busy = false;
+      const queue = [];
+
+      async function init() {
+        try {
+          oww = await OpenWakeWord.create({
+            baseUrl: "../models/",
+            wakewordModels: WAKEWORDS,
+          });
+          buildRows(oww.modelNames);
+          startBtn.disabled = false;
+          startBtn.textContent = "Start Listening";
+          statusEl.textContent = "Models loaded. Click to start.";
+        } catch (err) {
+          console.error(err);
+          statusEl.textContent =
+            "Failed to load models. Run `npm run download-models` in /web first. " +
+            err.message;
+        }
+      }
+
+      let frameCount = 0;
+      function rms(frame) {
+        let sum = 0;
+        for (let i = 0; i < frame.length; i++) sum += frame[i] * frame[i];
+        return Math.sqrt(sum / frame.length) / 32768; // 0..1
+      }
+
+      async function drain() {
+        if (busy) return;
+        busy = true;
+        while (queue.length) {
+          const frame = queue.shift();
+          frameCount++;
+          const level = Math.round(rms(frame) * 100);
+          statusEl.textContent = `Listening @ ${mic.sampleRate} Hz · frames ${frameCount} · mic level ${level}%`;
+          let scores;
+          try {
+            scores = await oww.predict(frame);
+          } catch (e) {
+            console.error(e);
+            continue;
+          }
+          const th = +thresholdEl.value;
+          for (const [label, score] of Object.entries(scores)) {
+            const r = rows[label];
+            if (!r) continue;
+            r.fill.style.width = `${Math.min(100, score * 100)}%`;
+            r.score.textContent = score.toFixed(2);
+            if (score >= th) {
+              r.bar.classList.add("fired");
+              showToast(label);
+              setTimeout(() => r.bar.classList.remove("fired"), 600);
+            }
+          }
+        }
+        busy = false;
+      }
+
+      let listening = false;
+      startBtn.addEventListener("click", async () => {
+        if (!listening) {
+          mic = new Microphone((frame) => {
+            queue.push(frame);
+            drain();
+          });
+          try {
+            await mic.start();
+          } catch (e) {
+            statusEl.textContent = "Microphone access denied: " + e.message;
+            return;
+          }
+          listening = true;
+          startBtn.classList.add("listening");
+          startBtn.textContent = "Stop";
+          statusEl.textContent = `Listening @ ${mic.sampleRate} Hz…`;
+        } else {
+          await mic.stop();
+          await oww.reset();
+          listening = false;
+          startBtn.classList.remove("listening");
+          startBtn.textContent = "Start Listening";
+          statusEl.textContent = "Stopped.";
+        }
+      });
+
+      init();
+    </script>
+  </body>
+</html>
