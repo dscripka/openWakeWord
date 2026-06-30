@@ -1,0 +1,65 @@
+{
+  "name": "openwakeword-web",
+  "version": "0.1.0",
+  "description": "Native browser (JavaScript) port of openWakeWord. Runs wake word detection fully client-side using ONNX Runtime Web.",
+  "type": "module",
+  "main": "src/openwakeword.js",
+  "types": "src/openwakeword.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/openwakeword.d.ts",
+      "import": "./src/openwakeword.js"
+    },
+    "./microphone": {
+      "types": "./src/microphone.d.ts",
+      "import": "./src/microphone.js"
+    },
+    "./audio-features": {
+      "types": "./src/audio-features.d.ts",
+      "import": "./src/audio-features.js"
+    },
+    "./models": {
+      "types": "./src/models.d.ts",
+      "import": "./src/models.js"
+    }
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "download-models": "node ./scripts/download-models.mjs",
+    "serve": "python3 -m http.server 8080",
+    "test": "node ./test/verify.mjs"
+  },
+  "keywords": [
+    "wakeword",
+    "wake-word",
+    "openwakeword",
+    "speech",
+    "voice",
+    "onnx",
+    "onnxruntime-web",
+    "browser",
+    "webaudio",
+    "audioworklet"
+  ],
+  "author": "Kousthub Raja (https://github.com/kousthubraja)",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/dscripka/openWakeWord/tree/main/web#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dscripka/openWakeWord.git",
+    "directory": "web"
+  },
+  "bugs": {
+    "url": "https://github.com/dscripka/openWakeWord/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "onnxruntime-web": "^1.27.0"
+  }
+}

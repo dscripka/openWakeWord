@@ -142,3 +142,4 @@ examples/
 
 # archive files
 archive/
+node_modules/
