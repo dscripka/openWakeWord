@@ -16,7 +16,6 @@
 import os
 import numpy as np
 import pathlib
-from collections import deque
 from multiprocessing.pool import ThreadPool
 from multiprocessing import Process, Queue
 import time
@@ -24,8 +23,53 @@ import logging
 from tqdm import tqdm
 import openwakeword
 from numpy.lib.format import open_memmap
-from typing import Union, List, Callable, Deque
+from typing import Union, List, Callable
 import requests
+
+
+class _RawAudioBuffer():
+    """A fixed-capacity FIFO of 16-bit PCM samples, backed by a contiguous numpy array.
+
+    Only the most recent samples are ever read (see `tail`), so this keeps the audio
+    contiguous and compacts in place when it runs out of room, rather than paying a
+    copy on every append. The deque this replaces required converting all 160,000
+    buffered samples to a Python list on every 80 ms frame just to read the last ~1,760
+    of them, which cost more than the melspectrogram model itself.
+    """
+    def __init__(self, maxlen: int):
+        self.maxlen = maxlen
+        self._buf = np.zeros(maxlen*2, dtype=np.int16)  # slack so compaction is amortized
+        self._n = 0  # samples currently held in `_buf`
+
+    def __len__(self):
+        return min(self._n, self.maxlen)
+
+    def clear(self):
+        self._n = 0
+
+    def extend(self, x):
+        x = np.asarray(x)
+        if x.dtype != np.int16:
+            x = x.astype(np.int16)
+
+        n = x.shape[0]
+        if n >= self.maxlen:
+            self._buf[:self.maxlen] = x[-self.maxlen:]
+            self._n = self.maxlen
+            return
+
+        if self._n + n > self._buf.shape[0]:
+            # Out of room: keep only the newest `maxlen` samples and start over from there
+            self._buf[:self.maxlen] = self._buf[self._n - self.maxlen:self._n]
+            self._n = self.maxlen
+
+        self._buf[self._n:self._n + n] = x
+        self._n += n
+
+    def tail(self, n: int):
+        """Return a view of the `n` most recent samples (fewer if the buffer holds fewer)."""
+        n = min(n, self._n)
+        return self._buf[self._n - n:self._n]
 
 
 # Base class for computing audio features using Google's speech_embedding
@@ -161,12 +205,16 @@ class AudioFeatures():
             self.embedding_model_predict = tflite_embedding_predict
 
         # Create databuffers with empty/random data
-        self.raw_data_buffer: Deque = deque(maxlen=sr*10)
+        self.raw_data_buffer = _RawAudioBuffer(maxlen=sr*10)
         self.melspectrogram_buffer = np.ones((76, 32))  # n_frames x num_features
         self.melspectrogram_max_len = 10*97  # 97 is the number of frames in 1 second of 16hz audio
         self.accumulated_samples = 0  # the samples added to the buffer since the audio preprocessor was last called
         self.raw_data_remainder = np.empty(0)
-        self.feature_buffer = self._get_embeddings(np.random.randint(-1000, 1000, 16000*4).astype(np.int16))
+        # The feature buffer is primed with the embeddings of 4 seconds of random audio. Embedding
+        # that audio costs ~50 ms, so it is done once here and the result re-used by `reset`, which
+        # also makes repeated resets reproducible instead of re-priming with fresh noise each time.
+        self._primed_feature_buffer = self._get_embeddings(np.random.randint(-1000, 1000, 16000*4).astype(np.int16))
+        self.feature_buffer = self._primed_feature_buffer.copy()
         self.feature_buffer_max_len = 120  # ~10 seconds of feature buffer history
 
     def reset(self):
@@ -175,7 +223,7 @@ class AudioFeatures():
         self.melspectrogram_buffer = np.ones((76, 32))
         self.accumulated_samples = 0
         self.raw_data_remainder = np.empty(0)
-        self.feature_buffer = self._get_embeddings(np.random.randint(-1000, 1000, 16000*4).astype(np.int16))
+        self.feature_buffer = self._primed_feature_buffer.copy()
 
     def _get_melspectrogram(self, x: Union[np.ndarray, List], melspec_transform: Callable = lambda x: x/10 + 2):
         """
@@ -394,7 +442,7 @@ class AudioFeatures():
             raise ValueError("The number of input frames must be at least 400 samples @ 16khz (25 ms)!")
 
         self.melspectrogram_buffer = np.vstack(
-            (self.melspectrogram_buffer, self._get_melspectrogram(list(self.raw_data_buffer)[-n_samples-160*3:]))
+            (self.melspectrogram_buffer, self._get_melspectrogram(self.raw_data_buffer.tail(n_samples + 160*3)))
         )
 
         if self.melspectrogram_buffer.shape[0] > self.melspectrogram_max_len:
@@ -404,7 +452,7 @@ class AudioFeatures():
         """
         Adds raw audio data to the input buffer
         """
-        self.raw_data_buffer.extend(x.tolist() if isinstance(x, np.ndarray) else x)
+        self.raw_data_buffer.extend(x)
 
     def _streaming_features(self, x):
         # Add raw audio data to buffer, temporarily storing extra frames if not an even number of 80 ms chunks
