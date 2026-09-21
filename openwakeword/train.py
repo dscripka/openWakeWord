@@ -606,35 +606,35 @@ if __name__ == '__main__':
         "--generate_clips",
         help="Execute the synthetic data generation process",
         action="store_true",
-        default="False",
+        default=False,
         required=False
     )
     parser.add_argument(
         "--augment_clips",
         help="Execute the synthetic data augmentation process",
         action="store_true",
-        default="False",
+        default=False,
         required=False
     )
     parser.add_argument(
         "--overwrite",
         help="Overwrite existing openwakeword features when the --augment_clips flag is used",
         action="store_true",
-        default="False",
+        default=False,
         required=False
     )
     parser.add_argument(
         "--train_model",
         help="Execute the model training process",
         action="store_true",
-        default="False",
+        default=False,
         required=False
     )
     parser.add_argument(
         "--convert_to_tflite",
         help="Convert the trained ONNX model to TFLite format",
         action="store_true",
-        default="False",
+        default=False,
         required=False
     )
 
@@ -642,8 +642,9 @@ if __name__ == '__main__':
     config = yaml.load(open(args.training_config, 'r').read(), yaml.Loader)
 
     # imports Piper for synthetic sample generation
-    sys.path.insert(0, os.path.abspath(config["piper_sample_generator_path"]))
-    from generate_samples import generate_samples
+    if config.get("piper_sample_generator_path"):
+        sys.path.insert(0, os.path.abspath(config["piper_sample_generator_path"]))
+        from generate_samples import generate_samples
 
     # Define output locations
     config["output_dir"] = os.path.abspath(config["output_dir"])
@@ -876,7 +877,7 @@ if __name__ == '__main__':
         X_val_fp_labels = np.zeros(X_val_fp.shape[0]).astype(np.float32)
         X_val_fp = torch.utils.data.DataLoader(
             torch.utils.data.TensorDataset(torch.from_numpy(X_val_fp), torch.from_numpy(X_val_fp_labels)),
-            batch_size=len(X_val_fp_labels)
+            batch_size=min(256, len(X_val_fp_labels))
         )
 
         X_val_pos = np.load(os.path.join(feature_save_dir, "positive_features_test.npy"))
