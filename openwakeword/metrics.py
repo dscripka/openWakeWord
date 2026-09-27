@@ -13,7 +13,6 @@
 # limitations under the License.
 
 # Imports
-import re
 from tqdm import tqdm
 import numpy as np
 from typing import List
@@ -34,15 +33,18 @@ def get_false_positives(scores: List, threshold: float, grouping_window: int = 5
     Returns:
         int: The number of false positive predictions in the list of scores
     """
-    bin_pred = np.array(scores) >= threshold
-    bin_pred_string = ''.join(["1" if i else "0" for i in bin_pred])
-    transitions = list(re.finditer("01", bin_pred_string))
-    n = grouping_window
-    for t in transitions:
-        if bin_pred[t.end()] != 0:
-            bin_pred[t.end():t.end() + min(len(transitions) - t.end(), n)] = [0]*min(len(transitions) - t.end(), n)
-
-    return sum(bin_pred)
+    bin_pred = np.asarray(scores) >= threshold
+    count = 0
+    index = 0
+    # After one frame above the threshold, the next grouping_window frames
+    # are ignored before another false activation is counted.
+    while index < len(bin_pred):
+        if bin_pred[index]:
+            count += 1
+            index += 1 + grouping_window
+        else:
+            index += 1
+    return count
 
 
 def generate_roc_curve_fprs(
