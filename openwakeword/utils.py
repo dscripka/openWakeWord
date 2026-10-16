@@ -17,6 +17,7 @@ import os
 import numpy as np
 import pathlib
 from collections import deque
+from itertools import islice
 from multiprocessing.pool import ThreadPool
 from multiprocessing import Process, Queue
 import time
@@ -393,8 +394,12 @@ class AudioFeatures():
         if len(self.raw_data_buffer) < 400:
             raise ValueError("The number of input frames must be at least 400 samples @ 16khz (25 ms)!")
 
+        # Read only the newest samples from the end of the deque, rather than copying the whole
+        # raw audio buffer (10 s) into a list on every call
+        n_tail = min(n_samples + 160*3, len(self.raw_data_buffer))
+        tail = list(islice(reversed(self.raw_data_buffer), n_tail))[::-1]
         self.melspectrogram_buffer = np.vstack(
-            (self.melspectrogram_buffer, self._get_melspectrogram(list(self.raw_data_buffer)[-n_samples-160*3:]))
+            (self.melspectrogram_buffer, self._get_melspectrogram(tail))
         )
 
         if self.melspectrogram_buffer.shape[0] > self.melspectrogram_max_len:
